@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useMediaStore } from "@/stores/useMediaStore";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { Image as ImageIcon, Camera, RefreshCw } from "lucide-react";
+import { Image as ImageIcon, Camera, RefreshCw, Search, Plus } from "lucide-react";
 
 interface SceneGalleryViewProps {
   onPush?: (prompt: string, action: string) => void;
@@ -19,10 +19,56 @@ const REGEN_POOL = [
   "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=600&auto=format&fit=crop"
 ];
 
+const MOCK_STOCK_PHOTOS = [
+  {
+    title: "Deep Space Nebula wormhole",
+    url: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=600&auto=format&fit=crop",
+    keywords: ["space", "wormhole", "nebula", "galaxy", "stars"]
+  },
+  {
+    title: "Mechanical keyboard backlit keys",
+    url: "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?q=80&w=600&auto=format&fit=crop",
+    keywords: ["keyboard", "typing", "coding", "hands", "developer"]
+  },
+  {
+    title: "Digital matrix data lines",
+    url: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=600&auto=format&fit=crop",
+    keywords: ["server", "lights", "technology", "network", "matrix", "cyberspace", "code"]
+  },
+  {
+    title: "Developer workstation setup",
+    url: "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?q=80&w=600&auto=format&fit=crop",
+    keywords: ["monitor", "coding", "desk", "laptop", "developer", "office"]
+  },
+  {
+    title: "Glowing cybersecurity node network",
+    url: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=600&auto=format&fit=crop",
+    keywords: ["cyber", "security", "nodes", "server", "matrix", "network"]
+  },
+  {
+    title: "Retro green command terminal",
+    url: "https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=600&auto=format&fit=crop",
+    keywords: ["retro", "terminal", "code", "green"]
+  },
+  {
+    title: "City traffic skyline night lapse",
+    url: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=600&auto=format&fit=crop",
+    keywords: ["city", "traffic", "skyline", "night", "timelapse"]
+  },
+  {
+    title: "Raindrops sliding on window glass",
+    url: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=600&auto=format&fit=crop",
+    keywords: ["rain", "window", "drop", "city", "wet"]
+  }
+];
+
 export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
   const { sceneImages, setSceneImages } = useMediaStore();
   const contentFormat = useProjectStore((state) => state.contentFormat);
   const [regeneratingScenes, setRegeneratingScenes] = useState<number[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState(MOCK_STOCK_PHOTOS.slice(0, 3));
+  const [activeDropdownIndex, setActiveDropdownIndex] = useState<number | null>(null);
 
   const handlePromptChange = (sceneNumber: number, newPrompt: string) => {
     const updatedImages = sceneImages.map((img) =>
@@ -49,6 +95,28 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
     }, 850);
   };
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) {
+      setSearchResults(MOCK_STOCK_PHOTOS.slice(0, 3));
+      return;
+    }
+    const filtered = MOCK_STOCK_PHOTOS.filter((item) =>
+      item.title.toLowerCase().includes(q) ||
+      item.keywords.some((k) => k.includes(q))
+    );
+    setSearchResults(filtered);
+  };
+
+  const handleAddToScene = (sceneNumber: number, url: string) => {
+    const updatedImages = sceneImages.map((img) =>
+      img.sceneNumber === sceneNumber ? { ...img, imageUrl: url } : img
+    );
+    setSceneImages(updatedImages);
+    setActiveDropdownIndex(null);
+  };
+
   if (sceneImages.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 text-center py-12">
@@ -71,7 +139,7 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-1 mb-4 min-h-0">
+      <div className="flex-1 overflow-y-auto pr-1 mb-4 min-h-0 space-y-6 scrollbar-thin">
         <div
           className={`grid gap-4 ${
             contentFormat === "short"
@@ -145,6 +213,98 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
               </div>
             );
           })}
+        </div>
+
+        {/* Stock Library Search Panel */}
+        <div className="pt-6 border-t border-studio-border/60 space-y-4">
+          <div className="flex items-center justify-between shrink-0">
+            <h4 className="text-xs font-bold text-studio-text-primary flex items-center gap-1.5 uppercase tracking-wider">
+              <Search size={14} className="text-accent" />
+              Search Stock Libraries
+            </h4>
+            <span className="text-[9px] font-bold text-accent px-2 py-0.5 rounded bg-accent/15 border border-accent/30 uppercase tracking-widest">
+              Pexels & Pixabay Integrated
+            </span>
+          </div>
+
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-studio-text-secondary" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search stock photos (e.g. space wormhole, coding setup, network lights)..."
+                className="w-full pl-10 pr-4 py-2 bg-studio-bg border border-studio-border rounded-xl text-xs text-studio-text-primary focus:outline-none focus:border-accent placeholder-studio-text-secondary/50 font-sans"
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-accent hover:bg-accent/90 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer shadow-md"
+            >
+              Search
+            </button>
+          </form>
+
+          {searchResults.length === 0 ? (
+            <div className="p-8 text-center text-xs text-studio-text-secondary bg-studio-bg/40 border border-studio-border/30 rounded-2xl">
+              No matching stock photos found. Try different keywords.
+            </div>
+          ) : (
+            <div className="flex gap-4 overflow-x-auto pb-3 pt-1 shrink-0 scrollbar-thin">
+              {searchResults.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="w-64 shrink-0 aspect-[16/9] relative rounded-xl overflow-hidden border border-studio-border/60 hover:border-accent/40 transition-colors group"
+                >
+                  <div
+                    className="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-105"
+                    style={{ backgroundImage: `url(${item.url})` }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                  
+                  <div className="absolute bottom-2 left-2 right-2 flex flex-col gap-1.5 z-20">
+                    <span className="text-[10px] font-bold text-white truncate drop-shadow-sm">
+                      {item.title}
+                    </span>
+                    <button
+                      onClick={() => setActiveDropdownIndex(idx)}
+                      className="flex items-center justify-center gap-1 py-1 px-2.5 rounded bg-accent hover:bg-accent/90 text-[9px] font-bold text-white transition-colors cursor-pointer w-fit shadow"
+                    >
+                      <Plus size={10} />
+                      Add to Scene
+                    </button>
+                  </div>
+
+                  {/* Add to Scene Dropdown Overlay */}
+                  {activeDropdownIndex === idx && (
+                    <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-3 z-30 animate-fade-in backdrop-blur-sm">
+                      <span className="text-[9px] font-bold text-studio-text-secondary uppercase tracking-wider mb-2">
+                        Select Scene Number
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 justify-center">
+                        {sceneImages.map((scene) => (
+                          <button
+                            key={scene.sceneNumber}
+                            onClick={() => handleAddToScene(scene.sceneNumber, item.url)}
+                            className="px-2.5 py-1.5 rounded bg-accent hover:bg-accent/80 text-[10px] font-bold text-white transition-colors cursor-pointer min-w-16"
+                          >
+                            Scene {scene.sceneNumber}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setActiveDropdownIndex(null)}
+                        className="mt-3 text-[9px] text-studio-text-secondary hover:text-studio-text-primary"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
