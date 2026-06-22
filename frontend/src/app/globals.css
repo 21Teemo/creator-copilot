@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0F0F12;
+  --foreground: #F8F8F8;
+  
+  /* Mode accents (Default is Long - Indigo) */
+  --accent: #6366F1;
+  --accent-rgb: 99, 102, 241;
+  --accent-muted: rgba(99, 102, 241, 0.15);
+  --accent-border: rgba(99, 102, 241, 0.2);
+}
+
+[data-format="long"] {
+  --accent: #6366F1;
+  --accent-rgb: 99, 102, 241;
+  --accent-muted: rgba(99, 102, 241, 0.15);
+  --accent-border: rgba(99, 102, 241, 0.2);
+}
+
+[data-format="short"] {
+  --accent: #A855F7;
+  --accent-rgb: 168, 85, 247;
+  --accent-muted: rgba(168, 85, 247, 0.15);
+  --accent-border: rgba(168, 85, 247, 0.2);
+}
+
+@theme {
+  --color-studio-bg: #0F0F12;
+  --color-studio-surface: #1A1A1F;
+  --color-studio-border: #27272A;
+  --color-studio-text-primary: #F8F8F8;
+  --color-studio-text-secondary: #A1A1AA;
+  --color-studio-accent-long: #6366F1;
+  --color-studio-accent-short: #A855F7;
+  --color-studio-success: #14B8A6;
+  
+  --color-accent: var(--accent);
+  --color-accent-muted: var(--accent-muted);
+  --color-accent-border: var(--accent-border);
+  
+  --radius-studio: 1.5rem;
+  
+  --shadow-studio: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  --shadow-canvas: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbars for a premium feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0F0F12;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272A;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: rgba(26, 26, 31, 0.8);
+  backdrop-filter: blur(16px);
+  border: 1px border-studio-border;
+}
+
+/* Skeleton animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, #1A1A1F 25%, #27272A 50%, #1A1A1F 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+}

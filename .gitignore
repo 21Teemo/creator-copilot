@@ -1,0 +1,19 @@
+# dependencies
+**/node_modules/
+
+# next.js build files
+**/.next/
+**/out/
+**/build/
+
+# debug and logs
+**/*.log
+**/.pnpm-debug.log*
+.DS_Store
+Thumbs.db
+
+# env files
+**/.env*
+
+# typescript build info
+**/*.tsbuildinfo
