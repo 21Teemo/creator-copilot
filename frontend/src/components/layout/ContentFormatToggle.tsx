@@ -15,17 +15,15 @@ export default function ContentFormatToggle() {
       <div className="relative flex items-center bg-studio-surface p-1 rounded-full border border-studio-border/60">
         {/* Sliding Indicator Background */}
         <div
-          className={`absolute h-7 rounded-full transition-all duration-300 ease-out bg-accent ${
-            contentFormat === "short"
-              ? "left-[88px] w-[84px]"
-              : "left-[4px] w-[80px]"
+          className={`absolute h-7 w-[84px] rounded-full transition-transform duration-300 ease-out bg-accent left-[4px] ${
+            contentFormat === "short" ? "translate-x-[84px]" : "translate-x-0"
           }`}
         />
 
         {/* Long Button */}
         <button
           onClick={() => setContentFormat("long")}
-          className={`relative z-10 flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full transition-colors duration-200 cursor-pointer ${
+          className={`relative z-10 flex items-center justify-center gap-1.5 w-[84px] h-7 text-xs font-semibold rounded-full transition-colors duration-200 cursor-pointer ${
             contentFormat === "long"
               ? "text-studio-text-primary"
               : "text-studio-text-secondary hover:text-studio-text-primary"
@@ -38,7 +36,7 @@ export default function ContentFormatToggle() {
         {/* Short Button */}
         <button
           onClick={() => setContentFormat("short")}
-          className={`relative z-10 flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full transition-colors duration-200 cursor-pointer ${
+          className={`relative z-10 flex items-center justify-center gap-1.5 w-[84px] h-7 text-xs font-semibold rounded-full transition-colors duration-200 cursor-pointer ${
             contentFormat === "short"
               ? "text-studio-text-primary"
               : "text-studio-text-secondary hover:text-studio-text-primary"
