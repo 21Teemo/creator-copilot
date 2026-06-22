@@ -250,22 +250,7 @@ export const useScriptingStore = create<ScriptingState>()(
           const newStyle = VISUAL_STYLES.find(s => s.id === styleId);
           const newPrefix = newStyle && newStyle.promptSnippet ? `${newStyle.promptSnippet}, ` : "";
 
-          // 1. Rewrite narration script text
-          let updatedScript = state.script;
-          const sceneRegex = /\[Scene\s+(\d+)\s*-\s*Visual:\s*([\s\S]*?)\]/gi;
-          updatedScript = updatedScript.replace(sceneRegex, (match, sceneNum, visualPrompt) => {
-            let cleanPrompt = visualPrompt.trim();
-            for (const style of VISUAL_STYLES) {
-              if (style.promptSnippet && cleanPrompt.startsWith(style.promptSnippet + ", ")) {
-                cleanPrompt = cleanPrompt.substring(style.promptSnippet.length + 2);
-                break;
-              }
-            }
-            const newPrompt = newPrefix + cleanPrompt;
-            return `[Scene ${sceneNum} - Visual: ${newPrompt}]`;
-          });
-
-          // 2. Rewrite storyboard state
+          // Rewrite storyboard state (do NOT mutate narration script text)
           const updatedStoryboard = state.storyboard.map((scene) => {
             let cleanPrompt = scene.visualPrompt;
             for (const style of VISUAL_STYLES) {
@@ -283,7 +268,6 @@ export const useScriptingStore = create<ScriptingState>()(
 
           return {
             selectedStyle: styleId,
-            script: updatedScript,
             storyboard: updatedStoryboard
           };
         });
