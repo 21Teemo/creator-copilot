@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useRef, useEffect } from "react";
-import { useScriptingStore } from "@/stores/useScriptingStore";
-import { FileText, Eye, AlertCircle, Sparkles } from "lucide-react";
+import { useScriptingStore, VISUAL_STYLES } from "@/stores/useScriptingStore";
+import { FileText, Eye, AlertCircle, Sparkles, Info, Check } from "lucide-react";
 
 export default function ScriptView() {
-  const { script, outline, storyboard, setScript } = useScriptingStore();
+  const { script, outline, storyboard, setScript, selectedStyle, setSelectedStyle } = useScriptingStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-resize textarea to fit content
@@ -28,6 +28,8 @@ export default function ScriptView() {
     );
   }
 
+  const currentStyle = VISUAL_STYLES.find((s) => s.id === selectedStyle);
+
   return (
     <div className="flex flex-col flex-1 h-full select-none">
       <div className="flex items-center justify-between mb-4 shrink-0">
@@ -48,6 +50,108 @@ export default function ScriptView() {
           <span>{charCount} chars</span>
         </div>
       </div>
+
+      {/* Visual Style Presets Panel */}
+      <div className="mb-4 shrink-0 bg-studio-surface border border-studio-border/60 p-3.5 rounded-2xl">
+        <h4 className="text-[10px] font-bold text-studio-text-secondary uppercase tracking-wider mb-2.5 flex items-center gap-1">
+          <Sparkles size={11} className="text-accent" />
+          Aesthetic Visual Presets (Lavish Gothic Guide)
+        </h4>
+        <div className="flex flex-wrap gap-2">
+          {VISUAL_STYLES.map((style) => {
+            const isSelected = selectedStyle === style.id;
+            return (
+              <button
+                key={style.id}
+                onClick={() => setSelectedStyle(style.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer border ${
+                  isSelected
+                    ? "bg-accent/15 border-accent text-accent shadow-[0_0_12px_rgba(99,102,241,0.15)]"
+                    : "bg-studio-bg border-studio-border/60 text-studio-text-secondary hover:text-studio-text-primary hover:border-studio-border/80"
+                }`}
+              >
+                <span>{style.name}</span>
+                {isSelected && <Check size={11} className="shrink-0" />}
+                {style.id !== "default" && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedStyle(style.id);
+                    }}
+                    className="p-0.5 rounded-full hover:bg-studio-border/40 text-studio-text-secondary/60 hover:text-accent transition-colors"
+                    title="View style details"
+                  >
+                    <Info size={11} />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Selected Style Detail Card */}
+      {currentStyle && currentStyle.id !== "default" && (
+        <div className="mb-4 p-4 rounded-2xl bg-studio-surface border border-accent/25 shadow-lg animate-fade-in space-y-3.5 shrink-0 select-text">
+          <div className="flex items-center justify-between border-b border-studio-border/50 pb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles size={14} className="text-accent" />
+              <h4 className="text-xs font-bold text-studio-text-primary">
+                Active Style Details: {currentStyle.name}
+              </h4>
+            </div>
+            <button
+              onClick={() => setSelectedStyle("default")}
+              className="text-[10px] text-studio-text-secondary hover:text-studio-text-primary underline cursor-pointer"
+            >
+              Reset to Default
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] leading-relaxed">
+            <div className="space-y-1">
+              <span className="font-bold uppercase text-studio-text-secondary text-[9px] tracking-wider block">Core Aesthetic</span>
+              <p className="text-studio-text-primary">{currentStyle.aesthetic}</p>
+            </div>
+            <div className="space-y-2">
+              <div>
+                <span className="font-bold uppercase text-studio-text-secondary text-[9px] tracking-wider block mb-0.5">Lighting & Atmosphere</span>
+                <p className="text-studio-text-primary">{currentStyle.lighting}</p>
+              </div>
+              <div>
+                <span className="font-bold uppercase text-studio-text-secondary text-[9px] tracking-wider block mb-0.5">Composition</span>
+                <p className="text-studio-text-primary">{currentStyle.composition}</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div>
+                <span className="font-bold uppercase text-studio-text-secondary text-[9px] tracking-wider block mb-0.5">Best For / Pairings</span>
+                <p className="text-studio-text-primary">
+                  <strong>Best:</strong> {currentStyle.bestFor}<br />
+                  <strong>Pairings:</strong> {currentStyle.pairings}
+                </p>
+              </div>
+              <div>
+                <span className="font-bold uppercase text-studio-text-secondary text-[9px] tracking-wider block mb-1">Color Palette</span>
+                <div className="flex items-center gap-1.5">
+                  {currentStyle.colors.map((color) => (
+                    <div
+                      key={color}
+                      className="w-5 h-5 rounded-full border border-studio-border/60 relative group"
+                      style={{ backgroundColor: color }}
+                      title={color}
+                    >
+                      <span className="absolute -top-6 left-1/2 -translate-x-1/2 scale-0 group-hover:scale-100 bg-studio-surface border border-studio-border/80 text-[8px] font-mono text-studio-text-primary px-1.5 py-0.5 rounded shadow-lg transition-all whitespace-nowrap z-50">
+                        {color}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 h-full">
