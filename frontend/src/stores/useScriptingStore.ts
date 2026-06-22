@@ -181,7 +181,61 @@ export const useScriptingStore = create<ScriptingState>()(
       storyboard: [],
       thumbnailConcepts: [],
       selectedStyle: "default",
-      setScript: (script) => set({ script }),
+      setScript: (script) => {
+        set((state) => {
+          const sceneRegex = /\[Scene\s+(\d+)\s*-\s*Visual:\s*([\s\S]*?)\]/gi;
+          const storyboard: StoryboardScene[] = [];
+          let match;
+          const matches: { index: number; sceneNumber: number; visualPrompt: string }[] = [];
+          
+          while ((match = sceneRegex.exec(script)) !== null) {
+            matches.push({
+              index: match.index,
+              sceneNumber: parseInt(match[1], 10),
+              visualPrompt: match[2].trim(),
+            });
+          }
+
+          for (let i = 0; i < matches.length; i++) {
+            const current = matches[i];
+            const nextIndex = i + 1 < matches.length ? matches[i + 1].index : script.length;
+            const startOfNarration = current.index + script.substring(current.index).indexOf("]") + 1;
+            const blockText = script.substring(startOfNarration, nextIndex).trim();
+            
+            let narrationText = "";
+            const voiceoverMatch = blockText.match(/Voiceover:\s*([\s\S]*)/i);
+            if (voiceoverMatch) {
+              narrationText = voiceoverMatch[1].trim();
+            } else {
+              narrationText = blockText.trim();
+            }
+
+            let cleanPrompt = current.visualPrompt;
+            for (const style of VISUAL_STYLES) {
+              if (style.promptSnippet && cleanPrompt.startsWith(style.promptSnippet + ", ")) {
+                cleanPrompt = cleanPrompt.substring(style.promptSnippet.length + 2);
+                break;
+              }
+            }
+
+            const currentStyle = VISUAL_STYLES.find(s => s.id === state.selectedStyle);
+            const finalPrompt = currentStyle && currentStyle.promptSnippet
+              ? `${currentStyle.promptSnippet}, ${cleanPrompt}`
+              : cleanPrompt;
+
+            storyboard.push({
+              sceneNumber: current.sceneNumber,
+              visualPrompt: finalPrompt,
+              narrationText,
+            });
+          }
+
+          return {
+            script,
+            storyboard,
+          };
+        });
+      },
       setOutline: (outline) => set({ outline }),
       setStoryboard: (storyboard) => set({ storyboard }),
       setThumbnailConcepts: (thumbnailConcepts) => set({ thumbnailConcepts }),
