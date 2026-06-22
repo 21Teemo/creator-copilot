@@ -22,6 +22,13 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
   const contentFormat = useProjectStore((state) => state.contentFormat);
   const [regeneratingScenes, setRegeneratingScenes] = useState<number[]>([]);
 
+  const handlePromptChange = (sceneNumber: number, newPrompt: string) => {
+    const updatedVideos = sceneVideos.map((vid) =>
+      vid.sceneNumber === sceneNumber ? { ...vid, visualPrompt: newPrompt } : vid
+    );
+    setSceneVideos(updatedVideos);
+  };
+
   const handleRegenerateVideo = (sceneNumber: number) => {
     if (regeneratingScenes.includes(sceneNumber)) return;
     setRegeneratingScenes((prev) => [...prev, sceneNumber]);
@@ -118,11 +125,14 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
 
                   {/* Prompt Caption overlay */}
                   <div className="absolute bottom-3 left-3 right-3 z-20">
-                    <div className="flex items-start gap-1.5 text-white">
-                      <Camera size={11} className="shrink-0 text-accent mt-0.5" />
-                      <p className="text-[10px] leading-normal font-medium line-clamp-2">
-                        {scene.visualPrompt}
-                      </p>
+                    <div className="flex items-start gap-1.5 text-white bg-black/45 backdrop-blur-sm p-1.5 rounded-lg border border-white/5">
+                      <Camera size={12} className="shrink-0 text-accent mt-1" />
+                      <textarea
+                        value={scene.visualPrompt}
+                        onChange={(e) => handlePromptChange(scene.sceneNumber, e.target.value)}
+                        className="w-full bg-transparent text-[10px] leading-normal font-medium text-white focus:outline-none resize-none h-11 placeholder-white/40 focus:bg-black/20 px-1 rounded transition-colors"
+                        placeholder="Edit visual prompt..."
+                      />
                     </div>
                   </div>
 
