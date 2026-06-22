@@ -1,6 +1,7 @@
 "use client";
 
 import React, { use, useState, useEffect } from "react";
+import { redirect } from "next/navigation";
 import StudioShell from "@/components/layout/StudioShell";
 import ProjectHeader from "@/components/layout/ProjectHeader";
 import ContentFormatToggle from "@/components/layout/ContentFormatToggle";
@@ -25,6 +26,10 @@ interface ProjectPageProps {
 export default function ProjectPage({ params }: ProjectPageProps) {
   // Unwrap Next.js dynamic path parameters
   const { projectId } = use(params);
+
+  if (projectId === "demo-project") {
+    redirect("/projects/creator-copilot");
+  }
 
   const [mounted, setMounted] = useState(false);
   
