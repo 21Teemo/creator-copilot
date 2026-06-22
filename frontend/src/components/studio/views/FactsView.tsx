@@ -4,8 +4,12 @@ import React from "react";
 import { useResearchStore } from "@/stores/useResearchStore";
 import { Search, Link as LinkIcon, AlertCircle, FileText } from "lucide-react";
 
-export default function FactsView() {
-  const summaries = useResearchStore((state) => state.summaries);
+interface FactsViewProps {
+  onPush?: (prompt: string, action: string) => void;
+}
+
+export default function FactsView({ onPush }: FactsViewProps) {
+  const { summaries, updateSummaryText } = useResearchStore();
 
   if (!summaries) {
     return (
@@ -36,42 +40,26 @@ export default function FactsView() {
             <div className="px-4 py-3 bg-studio-border/20 border-b border-studio-border/40 flex items-center gap-2">
               <FileText size={14} className="text-accent" />
               <span className="text-xs font-bold text-studio-text-primary uppercase tracking-wider">
-                Synthesized Brief
+                Synthesized Brief (Editable)
               </span>
             </div>
-            <div className="p-5 flex-1 overflow-y-auto">
-              <div className="prose prose-invert max-w-none text-xs leading-relaxed text-studio-text-primary space-y-4">
-                {summaries.summaryText.split("\n\n").map((para, i) => {
-                  if (para.startsWith("- ") || para.startsWith("* ")) {
-                    return (
-                      <ul key={i} className="list-disc pl-4 space-y-2 text-studio-text-secondary">
-                        {para.split("\n").map((li, j) => (
-                          <li key={j}>{li.replace(/^[-*]\s+/, "")}</li>
-                        ))}
-                      </ul>
-                    );
-                  }
-                  if (para.startsWith("### ")) {
-                    return (
-                      <h4 key={i} className="text-sm font-bold text-accent mt-4">
-                        {para.replace("### ", "")}
-                      </h4>
-                    );
-                  }
-                  if (para.startsWith("## ")) {
-                    return (
-                      <h3 key={i} className="text-base font-bold text-studio-text-primary mt-6">
-                        {para.replace("## ", "")}
-                      </h3>
-                    );
-                  }
-                  return (
-                    <p key={i} className="text-studio-text-secondary">
-                      {para}
-                    </p>
-                  );
-                })}
-              </div>
+            <div className="p-5 flex-1 flex flex-col min-h-0">
+              <textarea
+                value={summaries.summaryText}
+                onChange={(e) => updateSummaryText(e.target.value)}
+                className="w-full flex-1 bg-transparent text-studio-text-primary text-xs leading-relaxed focus:outline-none resize-none placeholder-studio-text-secondary/50 font-sans p-3.5 rounded-xl bg-studio-bg/30 border border-studio-border/50 focus:border-accent/40 focus:bg-studio-bg/60 transition-all duration-200"
+                placeholder="Review or edit the research brief summary..."
+              />
+              {onPush && (
+                <div className="mt-4 pt-3.5 border-t border-studio-border/30 flex justify-end shrink-0">
+                  <button
+                    onClick={() => onPush("Write a voiceover script and storyboard outline based on the research brief.", "write_script")}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent hover:bg-accent/90 text-xs font-bold text-white transition-all cursor-pointer shadow-md"
+                  >
+                    Confirm & Write Script &rarr;
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

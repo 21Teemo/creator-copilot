@@ -5,7 +5,11 @@ import { useResearchStore } from "@/stores/useResearchStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { Eye, Clock, User, Compass, Play } from "lucide-react";
 
-export default function TrendsView() {
+interface TrendsViewProps {
+  onPush?: (prompt: string, action: string) => void;
+}
+
+export default function TrendsView({ onPush }: TrendsViewProps) {
   const trends = useResearchStore((state) => state.trends);
   const contentFormat = useProjectStore((state) => state.contentFormat);
 
@@ -103,9 +107,14 @@ export default function TrendsView() {
                     <Eye size={11} className="text-accent" />
                     {item.views} views
                   </span>
-                  <span className="hover:text-accent cursor-pointer font-bold">
-                    View &rarr;
-                  </span>
+                  {onPush && (
+                    <button
+                      onClick={() => onPush(`Research and fact check trend: "${item.title}"`, "fact_finder")}
+                      className="text-accent hover:text-accent-hover font-bold flex items-center gap-0.5 cursor-pointer bg-accent/10 hover:bg-accent/20 px-2.5 py-1 rounded-lg border border-accent/25 transition-all text-[10px]"
+                    >
+                      Use Trend &rarr;
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

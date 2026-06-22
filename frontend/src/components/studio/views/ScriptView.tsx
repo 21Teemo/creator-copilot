@@ -4,7 +4,11 @@ import React, { useRef, useEffect } from "react";
 import { useScriptingStore, VISUAL_STYLES } from "@/stores/useScriptingStore";
 import { FileText, Eye, AlertCircle, Sparkles, Info, Check } from "lucide-react";
 
-export default function ScriptView() {
+interface ScriptViewProps {
+  onPush?: (prompt: string, action: string) => void;
+}
+
+export default function ScriptView({ onPush }: ScriptViewProps) {
   const { script, outline, storyboard, setScript, selectedStyle, setSelectedStyle } = useScriptingStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -27,8 +31,6 @@ export default function ScriptView() {
       </div>
     );
   }
-
-  const currentStyle = VISUAL_STYLES.find((s) => s.id === selectedStyle);
 
   return (
     <div className="flex flex-col flex-1 h-full select-none">
@@ -55,103 +57,79 @@ export default function ScriptView() {
       <div className="mb-4 shrink-0 bg-studio-surface border border-studio-border/60 p-3.5 rounded-2xl">
         <h4 className="text-[10px] font-bold text-studio-text-secondary uppercase tracking-wider mb-2.5 flex items-center gap-1">
           <Sparkles size={11} className="text-accent" />
-          Aesthetic Visual Presets (Lavish Gothic Guide)
+          Aesthetic Visual Presets (Hover for Style Guide details)
         </h4>
         <div className="flex flex-wrap gap-2">
           {VISUAL_STYLES.map((style) => {
             const isSelected = selectedStyle === style.id;
             return (
-              <button
-                key={style.id}
-                onClick={() => setSelectedStyle(style.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer border ${
-                  isSelected
-                    ? "bg-accent/15 border-accent text-accent shadow-[0_0_12px_rgba(99,102,241,0.15)]"
-                    : "bg-studio-bg border-studio-border/60 text-studio-text-secondary hover:text-studio-text-primary hover:border-studio-border/80"
-                }`}
-              >
-                <span>{style.name}</span>
-                {isSelected && <Check size={11} className="shrink-0" />}
+              <div key={style.id} className="relative group">
+                <button
+                  onClick={() => setSelectedStyle(style.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer border ${
+                    isSelected
+                      ? "bg-accent/15 border-accent text-accent shadow-[0_0_12px_rgba(99,102,241,0.15)]"
+                      : "bg-studio-bg border-studio-border/60 text-studio-text-secondary hover:text-studio-text-primary hover:border-studio-border/80"
+                  }`}
+                >
+                  <span>{style.name}</span>
+                  {isSelected && <Check size={11} className="shrink-0" />}
+                </button>
+
+                {/* Hover Tooltip Style Guide */}
                 {style.id !== "default" && (
-                  <span
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedStyle(style.id);
-                    }}
-                    className="p-0.5 rounded-full hover:bg-studio-border/40 text-studio-text-secondary/60 hover:text-accent transition-colors"
-                    title="View style details"
-                  >
-                    <Info size={11} />
-                  </span>
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 rounded-2xl bg-[#131317]/95 backdrop-blur-xl border border-accent/25 shadow-2xl p-4 opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 origin-top z-50 text-left select-none">
+                    <div className="flex items-center gap-1.5 border-b border-studio-border/50 pb-1.5 mb-2">
+                      <Sparkles size={12} className="text-accent shrink-0" />
+                      <h5 className="text-[11px] font-bold text-studio-text-primary truncate">
+                        {style.name} Style Preset
+                      </h5>
+                    </div>
+
+                    <div className="space-y-2.5 text-[10px] leading-relaxed">
+                      <div>
+                        <span className="font-bold uppercase text-studio-text-secondary text-[8px] tracking-wider block mb-0.5">Core Aesthetic</span>
+                        <p className="text-studio-text-primary">{style.aesthetic}</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="font-bold uppercase text-studio-text-secondary text-[8px] tracking-wider block mb-0.5">Lighting</span>
+                          <p className="text-studio-text-primary line-clamp-3">{style.lighting}</p>
+                        </div>
+                        <div>
+                          <span className="font-bold uppercase text-studio-text-secondary text-[8px] tracking-wider block mb-0.5">Composition</span>
+                          <p className="text-studio-text-primary line-clamp-3">{style.composition}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-end gap-2 pt-1 border-t border-studio-border/30">
+                        <div className="flex-1">
+                          <span className="font-bold uppercase text-studio-text-secondary text-[8px] tracking-wider block mb-0.5">Best For</span>
+                          <p className="text-studio-text-primary line-clamp-2 leading-tight">{style.bestFor}</p>
+                        </div>
+                        <div className="shrink-0">
+                          <span className="font-bold uppercase text-studio-text-secondary text-[8px] tracking-wider block mb-1">Colors</span>
+                          <div className="flex items-center gap-1">
+                            {style.colors.slice(0, 4).map((color) => (
+                              <div
+                                key={color}
+                                className="w-3.5 h-3.5 rounded-full border border-studio-border/40"
+                                style={{ backgroundColor: color }}
+                                title={color}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
       </div>
-
-      {/* Selected Style Detail Card */}
-      {currentStyle && currentStyle.id !== "default" && (
-        <div className="mb-4 p-4 rounded-2xl bg-studio-surface border border-accent/25 shadow-lg animate-fade-in space-y-3.5 shrink-0 select-text">
-          <div className="flex items-center justify-between border-b border-studio-border/50 pb-2">
-            <div className="flex items-center gap-2">
-              <Sparkles size={14} className="text-accent" />
-              <h4 className="text-xs font-bold text-studio-text-primary">
-                Active Style Details: {currentStyle.name}
-              </h4>
-            </div>
-            <button
-              onClick={() => setSelectedStyle("default")}
-              className="text-[10px] text-studio-text-secondary hover:text-studio-text-primary underline cursor-pointer"
-            >
-              Reset to Default
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] leading-relaxed">
-            <div className="space-y-1">
-              <span className="font-bold uppercase text-studio-text-secondary text-[9px] tracking-wider block">Core Aesthetic</span>
-              <p className="text-studio-text-primary">{currentStyle.aesthetic}</p>
-            </div>
-            <div className="space-y-2">
-              <div>
-                <span className="font-bold uppercase text-studio-text-secondary text-[9px] tracking-wider block mb-0.5">Lighting & Atmosphere</span>
-                <p className="text-studio-text-primary">{currentStyle.lighting}</p>
-              </div>
-              <div>
-                <span className="font-bold uppercase text-studio-text-secondary text-[9px] tracking-wider block mb-0.5">Composition</span>
-                <p className="text-studio-text-primary">{currentStyle.composition}</p>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div>
-                <span className="font-bold uppercase text-studio-text-secondary text-[9px] tracking-wider block mb-0.5">Best For / Pairings</span>
-                <p className="text-studio-text-primary">
-                  <strong>Best:</strong> {currentStyle.bestFor}<br />
-                  <strong>Pairings:</strong> {currentStyle.pairings}
-                </p>
-              </div>
-              <div>
-                <span className="font-bold uppercase text-studio-text-secondary text-[9px] tracking-wider block mb-1">Color Palette</span>
-                <div className="flex items-center gap-1.5">
-                  {currentStyle.colors.map((color) => (
-                    <div
-                      key={color}
-                      className="w-5 h-5 rounded-full border border-studio-border/60 relative group"
-                      style={{ backgroundColor: color }}
-                      title={color}
-                    >
-                      <span className="absolute -top-6 left-1/2 -translate-x-1/2 scale-0 group-hover:scale-100 bg-studio-surface border border-studio-border/80 text-[8px] font-mono text-studio-text-primary px-1.5 py-0.5 rounded shadow-lg transition-all whitespace-nowrap z-50">
-                        {color}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="flex-1 overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 h-full">
@@ -163,8 +141,8 @@ export default function ScriptView() {
                 Narration Script
               </span>
             </div>
-            <div className="p-6 flex-1 overflow-y-auto">
-              <div className="max-w-2xl mx-auto">
+            <div className="p-6 flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto max-w-2xl w-full mx-auto mb-4">
                 <textarea
                   ref={textareaRef}
                   value={script}
@@ -174,6 +152,16 @@ export default function ScriptView() {
                   rows={15}
                 />
               </div>
+              {onPush && (
+                <div className="pt-4 border-t border-studio-border/30 flex justify-end shrink-0 max-w-2xl w-full mx-auto">
+                  <button
+                    onClick={() => onPush("Generate storyboard keyframe scene pictures for the script.", "scene_pictures")}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent hover:bg-accent/90 text-xs font-bold text-white transition-all cursor-pointer shadow-md"
+                  >
+                    Confirm & Source Pictures &rarr;
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

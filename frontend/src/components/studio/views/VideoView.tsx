@@ -5,7 +5,11 @@ import { useMediaStore } from "@/stores/useMediaStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { Play, Film, AlertCircle, RefreshCw, Layers } from "lucide-react";
 
-export default function VideoView() {
+interface VideoViewProps {
+  onPush?: (prompt: string, action: string) => void;
+}
+
+export default function VideoView({ onPush }: VideoViewProps) {
   const { videoUrl, renderStatus, renderProgress } = useMediaStore();
   const contentFormat = useProjectStore((state) => state.contentFormat);
 
@@ -74,7 +78,7 @@ export default function VideoView() {
           </div>
         ) : (
           /* Rendered Video Player */
-          <div className="w-full h-full flex flex-col items-center justify-center">
+          <div className="w-full h-full flex flex-col items-center justify-between min-h-0">
             <div className="w-full flex items-center justify-between mb-3 shrink-0">
               <h3 className="text-xs font-bold text-studio-text-secondary uppercase tracking-wider">
                 Active Project Preview ({contentFormat === "short" ? "Vertical 9:16" : "Horizontal 16:9"})
@@ -82,10 +86,10 @@ export default function VideoView() {
             </div>
             
             <div
-              className={`relative bg-black rounded-2xl overflow-hidden border border-studio-border/80 shadow-studio flex items-center justify-center ${
+              className={`relative bg-black rounded-2xl overflow-hidden border border-studio-border/80 shadow-studio flex items-center justify-center flex-1 min-h-0 ${
                 contentFormat === "short"
-                  ? "h-[60vh] aspect-[9/16]"
-                  : "w-full aspect-video"
+                  ? "h-[50vh] aspect-[9/16]"
+                  : "w-full aspect-video max-h-[50vh]"
               }`}
             >
               <video
@@ -95,6 +99,17 @@ export default function VideoView() {
                 poster="/next.svg" /* Fallback thumbnail */
               />
             </div>
+
+            {onPush && (
+              <div className="w-full mt-4 pt-3.5 border-t border-studio-border/30 flex justify-end shrink-0">
+                <button
+                  onClick={() => onPush("Generate SEO descriptors and metadata.", "seo_publish")}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent hover:bg-accent/90 text-xs font-bold text-white transition-all cursor-pointer shadow-md"
+                >
+                  Confirm & Generate SEO &rarr;
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

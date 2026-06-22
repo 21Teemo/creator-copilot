@@ -115,17 +115,17 @@ function renderView(
     case "welcome":
       return <WelcomeView onSelectPrompt={onSelectPrompt} />;
     case "trends":
-      return <TrendsView />;
+      return <TrendsView onPush={onSelectPrompt} />;
     case "facts":
-      return <FactsView />;
+      return <FactsView onPush={onSelectPrompt} />;
     case "script":
-      return <ScriptView />;
+      return <ScriptView onPush={onSelectPrompt} />;
     case "scenes":
-      return <SceneGalleryView />;
+      return <SceneGalleryView onPush={onSelectPrompt} />;
     case "video":
-      return <SceneVideosView />;
+      return <SceneVideosView onPush={onSelectPrompt} />;
     case "ffmpeg":
-      return <VideoView />;
+      return <VideoView onPush={onSelectPrompt} />;
     case "seo":
       return <SeoView onPublish={onPublish} />;
     default:

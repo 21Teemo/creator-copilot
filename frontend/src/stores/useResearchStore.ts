@@ -26,6 +26,7 @@ interface ResearchState {
   summaries: ResearchSummary | null;
   setTrends: (trends: TrendItem[]) => void;
   setSummaries: (summaries: ResearchSummary | null) => void;
+  updateSummaryText: (text: string) => void;
   clearResearch: () => void;
 }
 
@@ -36,6 +37,12 @@ export const useResearchStore = create<ResearchState>()(
       summaries: null,
       setTrends: (trends) => set({ trends }),
       setSummaries: (summaries) => set({ summaries }),
+      updateSummaryText: (text) =>
+        set((state) => ({
+          summaries: state.summaries
+            ? { ...state.summaries, summaryText: text }
+            : null,
+        })),
       clearResearch: () => set({ trends: [], summaries: null }),
     }),
     {
