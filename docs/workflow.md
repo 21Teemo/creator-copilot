@@ -77,15 +77,16 @@ flowchart TB
 | **ElevenLabs Voice Synthesis** | Converts VO script to audio track | ElevenLabs API |
 | **FFmpeg Video Compilation Engine** | Assembles stock footage, voice, and graphics into final video | `POST /video/render`, `GET /video/render/:taskId/status` |
 
-Supporting endpoint for asset sourcing:
+Supporting endpoints for asset sourcing & storyboard gallery search:
 
 | Module | API |
 |--------|-----|
-| Stock footage / b-roll search | `POST /stock/search` |
+| Stock images / scene pictures search | `POST /stock/search` |
+| Stock video clips search | `POST /stock/videos` |
 
 **Async flow:** `video/render` dispatches a Celery task via Redis; client polls `status` until complete.
 
-**Output → Stage 4:** Rendered video file, final thumbnail, audio assets.
+**Output → Stage 4:** Rendered video file, custom thumbnail, audio assets.
 
 ---
 
@@ -112,4 +113,5 @@ Stage 3  Media Generation         →  Media Service      :8003  (+ Celery)
 Stage 4  SEO & Publishing         →  SEO Service        :8004
 ```
 
-The Next.js UI should mirror this four-stage flow — one section per stage, modules as sub-steps within each.
+The Next.js studio UI exposes this four-stage flow as a continuous, non-linear 6-step pipeline navigation dock:
+Explore Trends (Stage 1) → Fact Finder (Stage 1) → Write Script (Stage 2) → Scene Pictures (Stage 3) → Scene Videos (Stage 3) → SEO & Publish (Stage 4).
