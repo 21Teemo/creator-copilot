@@ -51,6 +51,7 @@ The backend is a **decoupled, event-driven microservices** stack written in Pyth
 | **ASGI Server** | **Uvicorn** | `^0.22.0` | High-speed server running service processes on ports 8001–8004 |
 | **Task Queue** | **Celery** | `^5.3.0` | Asynchronous task execution for video compile rendering |
 | **Message Broker** | **Redis** | `^7.0` | Message broker and task result backend for Celery (port 6379) |
+| **Media Synthesis** | **MoviePy** | `^1.0.3` | Python library for video editing, compositing, and timeline alignment (FFmpeg wrapper) |
 | **Media Processing** | **FFmpeg** | `^6.0` (libx264, aac) | CLI compiler engine for video, audio, and graphics compilation |
 
 ### Communication Protocols
