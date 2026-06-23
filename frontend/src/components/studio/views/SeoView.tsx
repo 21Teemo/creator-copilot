@@ -40,12 +40,20 @@ export default function SeoView({ onPublish }: SeoViewProps) {
   const [copiedTagIndex, setCopiedTagIndex] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedTitle, setCopiedTitle] = useState(false);
+  const [copiedDescription, setCopiedDescription] = useState(false);
 
   const handleCopySelectedTitle = () => {
     if (!selectedTitle) return;
     navigator.clipboard.writeText(selectedTitle);
     setCopiedTitle(true);
     setTimeout(() => setCopiedTitle(false), 1500);
+  };
+
+  const handleCopyDescription = () => {
+    if (!description) return;
+    navigator.clipboard.writeText(description);
+    setCopiedDescription(true);
+    setTimeout(() => setCopiedDescription(false), 1500);
   };
 
   const handleCopyTag = (tag: string, index: number) => {
@@ -166,9 +174,17 @@ export default function SeoView({ onPublish }: SeoViewProps) {
 
               {/* Description Panel */}
               <div className="space-y-2 pt-2">
-                <span className="text-[10px] font-bold text-studio-text-secondary uppercase tracking-wider">
-                  YouTube Description
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-studio-text-secondary uppercase tracking-wider">
+                    YouTube Description
+                  </span>
+                  <button
+                    onClick={handleCopyDescription}
+                    className="text-[9px] font-bold text-accent hover:text-accent/80 transition-colors uppercase cursor-pointer"
+                  >
+                    {copiedDescription ? "Copied!" : "Copy Description"}
+                  </button>
+                </div>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
