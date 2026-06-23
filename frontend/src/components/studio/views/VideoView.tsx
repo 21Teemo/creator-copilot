@@ -3,7 +3,7 @@
 import React from "react";
 import { useMediaStore } from "@/stores/useMediaStore";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { Play, Film, AlertCircle, RefreshCw, Layers } from "lucide-react";
+import { Play, Film, AlertCircle, RefreshCw, Layers, Download } from "lucide-react";
 
 interface VideoViewProps {
   onPush?: (prompt: string, action: string) => void;
@@ -14,6 +14,23 @@ export default function VideoView({ onPush }: VideoViewProps) {
   const contentFormat = useProjectStore((state) => state.contentFormat);
 
   const isRendering = renderStatus === "pending" || renderStatus === "in_progress";
+
+  const handleDownloadVideo = () => {
+    if (!videoUrl) return;
+    const link = document.createElement("a");
+    link.href = videoUrl;
+    link.download = `rendered-video.mp4`;
+    link.target = "_blank";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleRegenerateVideo = () => {
+    if (onPush) {
+      onPush("Re-render final video compilation using FFmpeg render CLI.", "ffmpeg_render");
+    }
+  };
 
   if (renderStatus === "idle" && !videoUrl) {
     return (
@@ -83,6 +100,24 @@ export default function VideoView({ onPush }: VideoViewProps) {
               <h3 className="text-xs font-bold text-studio-text-secondary uppercase tracking-wider">
                 Active Project Preview ({contentFormat === "short" ? "Vertical 9:16" : "Horizontal 16:9"})
               </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownloadVideo}
+                  title="Download final video"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-studio-surface border border-studio-border/60 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors text-[10px] font-bold uppercase tracking-wider"
+                >
+                  <Download size={12} />
+                  Download
+                </button>
+                <button
+                  onClick={handleRegenerateVideo}
+                  title="Regenerate final compilation"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-studio-surface border border-studio-border/60 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors text-[10px] font-bold uppercase tracking-wider"
+                >
+                  <RefreshCw size={12} />
+                  Regenerate
+                </button>
+              </div>
             </div>
             
             <div
