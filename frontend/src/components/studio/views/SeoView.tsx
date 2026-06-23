@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useSeoStore, PublishStatus } from "@/stores/useSeoStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useMediaStore } from "@/stores/useMediaStore";
-import { FileSearch, Sparkles, SquarePlay, CheckCircle, AlertCircle, RefreshCw, Download, Upload } from "lucide-react";
+import { FileSearch, Sparkles, SquarePlay, CheckCircle, AlertCircle, RefreshCw, Download, Upload, Camera } from "lucide-react";
 
 const MOCK_THUMBNAILS = [
   "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop",
@@ -29,6 +29,8 @@ export default function SeoView({ onPublish }: SeoViewProps) {
     setDescription,
     thumbnailUrl,
     setThumbnailUrl,
+    thumbnailPrompt,
+    setThumbnailPrompt,
   } = useSeoStore();
   const contentFormat = useProjectStore((state) => state.contentFormat);
   const { sceneImages } = useMediaStore();
@@ -37,6 +39,7 @@ export default function SeoView({ onPublish }: SeoViewProps) {
   const [isRegenerating, setIsRegenerating] = useState(false);
 
   const activeThumbnail = thumbnailUrl || sceneImages[0]?.imageUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop";
+  const activePrompt = thumbnailPrompt || sceneImages[0]?.visualPrompt || "Cyberpunk neon music cover art, high-CTR, dark styling";
 
   const handleDownloadThumbnail = () => {
     const link = document.createElement("a");
@@ -187,7 +190,7 @@ export default function SeoView({ onPublish }: SeoViewProps) {
                   </div>
 
                   {/* Hover actions inside card */}
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center gap-1.5">
+                  <div className="absolute top-2 right-2 opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center gap-1.5">
                     <button
                       onClick={handleDownloadThumbnail}
                       title="Download thumbnail"
@@ -215,6 +218,19 @@ export default function SeoView({ onPublish }: SeoViewProps) {
                     >
                       <RefreshCw size={12} className={isRegenerating ? "animate-spin text-accent" : ""} />
                     </button>
+                  </div>
+
+                  {/* Prompt Caption overlay */}
+                  <div className="absolute bottom-3 left-3 right-3 z-20">
+                    <div className="flex items-start gap-1.5 text-white bg-black/45 backdrop-blur-sm p-1.5 rounded-lg border border-white/5">
+                      <Camera size={12} className="shrink-0 text-accent mt-1" />
+                      <textarea
+                        value={activePrompt}
+                        onChange={(e) => setThumbnailPrompt(e.target.value)}
+                        className="w-full bg-transparent text-[10px] leading-normal font-medium text-white focus:outline-none resize-none h-11 placeholder-white/40 focus:bg-black/20 px-1 rounded transition-colors"
+                        placeholder="Edit thumbnail prompt..."
+                      />
+                    </div>
                   </div>
 
                   {/* Loading spinner */}

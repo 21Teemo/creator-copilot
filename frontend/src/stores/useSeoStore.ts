@@ -16,6 +16,7 @@ interface SeoState {
   publishedUrl: string | null;
   publishStatus: PublishStatus;
   thumbnailUrl: string | null;
+  thumbnailPrompt: string;
   setTitles: (titles: string[]) => void;
   setDescription: (description: string) => void;
   setTags: (tags: string[]) => void;
@@ -23,6 +24,7 @@ interface SeoState {
   setPublishedUrl: (url: string | null) => void;
   setPublishStatus: (status: PublishStatus) => void;
   setThumbnailUrl: (url: string | null) => void;
+  setThumbnailPrompt: (prompt: string) => void;
   clearSeo: () => void;
 }
 
@@ -36,6 +38,7 @@ export const useSeoStore = create<SeoState>()(
       publishedUrl: null,
       publishStatus: "idle",
       thumbnailUrl: null,
+      thumbnailPrompt: "",
       setTitles: (titles) => set({ titles }),
       setDescription: (description) => set({ description }),
       setTags: (tags) => set({ tags }),
@@ -43,6 +46,7 @@ export const useSeoStore = create<SeoState>()(
       setPublishedUrl: (publishedUrl) => set({ publishedUrl }),
       setPublishStatus: (publishStatus) => set({ publishStatus }),
       setThumbnailUrl: (thumbnailUrl) => set({ thumbnailUrl }),
+      setThumbnailPrompt: (thumbnailPrompt) => set({ thumbnailPrompt }),
       clearSeo: () =>
         set({
           titles: [],
@@ -52,6 +56,7 @@ export const useSeoStore = create<SeoState>()(
           publishedUrl: null,
           publishStatus: "idle",
           thumbnailUrl: null,
+          thumbnailPrompt: "",
         }),
     }),
     {
