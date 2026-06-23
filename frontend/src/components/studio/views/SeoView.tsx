@@ -39,6 +39,14 @@ export default function SeoView({ onPublish }: SeoViewProps) {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [copiedTagIndex, setCopiedTagIndex] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+  const [copiedTitle, setCopiedTitle] = useState(false);
+
+  const handleCopySelectedTitle = () => {
+    if (!selectedTitle) return;
+    navigator.clipboard.writeText(selectedTitle);
+    setCopiedTitle(true);
+    setTimeout(() => setCopiedTitle(false), 1500);
+  };
 
   const handleCopyTag = (tag: string, index: number) => {
     navigator.clipboard.writeText(`#${tag}`);
@@ -348,9 +356,17 @@ export default function SeoView({ onPublish }: SeoViewProps) {
                 ) : (
                   <div className="space-y-3">
                     <div className="p-3 bg-studio-bg border border-studio-border rounded-xl space-y-1.5 text-[11px] text-studio-text-secondary leading-normal">
-                      <p>
-                        Selected Title: <strong className="text-studio-text-primary">"{selectedTitle}"</strong>
-                      </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate">
+                          Selected Title: <strong className="text-studio-text-primary">"{selectedTitle}"</strong>
+                        </p>
+                        <button
+                          onClick={handleCopySelectedTitle}
+                          className="text-[9px] font-bold text-accent hover:text-accent/80 transition-colors uppercase cursor-pointer shrink-0"
+                        >
+                          {copiedTitle ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
                       <p>Aspect: {contentFormat === "short" ? "9:16 Shorts Preset" : "16:9 1080p Stream"}</p>
                     </div>
                     <button
