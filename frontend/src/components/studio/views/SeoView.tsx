@@ -37,6 +37,21 @@ export default function SeoView({ onPublish }: SeoViewProps) {
 
   const [selectedTitle, setSelectedTitle] = useState<string>("");
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [copiedTagIndex, setCopiedTagIndex] = useState<number | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
+
+  const handleCopyTag = (tag: string, index: number) => {
+    navigator.clipboard.writeText(`#${tag}`);
+    setCopiedTagIndex(index);
+    setTimeout(() => setCopiedTagIndex(null), 1500);
+  };
+
+  const handleCopyAllTags = () => {
+    const tagsString = tags.map((t) => `#${t}`).join(", ");
+    navigator.clipboard.writeText(tagsString);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 1500);
+  };
 
   const activeThumbnail = thumbnailUrl || sceneImages[0]?.imageUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop";
   const activePrompt = thumbnailPrompt || sceneImages[0]?.visualPrompt || "Cyberpunk neon music cover art, high-CTR, dark styling";
@@ -265,17 +280,27 @@ export default function SeoView({ onPublish }: SeoViewProps) {
               {/* Tags panel */}
               {tags.length > 0 && (
                 <div className="space-y-2">
-                  <span className="text-[10px] font-bold text-studio-text-secondary uppercase tracking-wider">
-                    Metadata Tags
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-studio-text-secondary uppercase tracking-wider">
+                      Metadata Tags
+                    </span>
+                    <button
+                      onClick={handleCopyAllTags}
+                      className="text-[9px] font-bold text-accent hover:text-accent/80 transition-colors uppercase cursor-pointer"
+                    >
+                      {copiedAll ? "Copied All!" : "Copy All"}
+                    </button>
+                  </div>
                   <div className="flex flex-wrap gap-1.5 p-3 bg-studio-bg border border-studio-border rounded-xl">
                     {tags.map((tag, idx) => (
-                      <span
+                      <button
                         key={idx}
-                        className="px-2 py-0.5 rounded bg-studio-surface border border-studio-border text-[10px] text-studio-text-secondary"
+                        onClick={() => handleCopyTag(tag, idx)}
+                        title="Click to copy tag"
+                        className="relative px-2 py-0.5 rounded bg-studio-surface border border-studio-border text-[10px] text-studio-text-secondary hover:text-accent hover:border-accent/40 cursor-pointer transition-all duration-200"
                       >
-                        #{tag}
-                      </span>
+                        {copiedTagIndex === idx ? "Copied!" : `#${tag}`}
+                      </button>
                     ))}
                   </div>
                 </div>
