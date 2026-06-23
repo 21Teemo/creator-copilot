@@ -52,9 +52,20 @@ The backend is a **decoupled, event-driven microservices** stack written in Pyth
 | **Task Queue** | **Celery** | `^5.3.0` | Asynchronous task execution for video compile rendering |
 | **Message Broker** | **Redis** | `^7.0` | Message broker and task result backend for Celery (port 6379) |
 | **Media Synthesis** | **MoviePy** | `^1.0.3` | Python library for video editing, compositing, and timeline alignment (FFmpeg wrapper) |
-| **Media Processing** | **FFmpeg** | `^6.0` (libx264, aac) | CLI compiler engine for video, audio, and graphics compilation |
+| **Media Processing** | **FFmpeg** | `^8.1` (libx264, aac) | CLI compiler engine for video, audio, and graphics compilation |
+
+### Media Synthesis & Processing Details (FFmpeg & MoviePy)
+
+To achieve maximum performance and stability during automated video compilation:
+- **FFmpeg 8.1 "Hoare"** is designated as the primary compiler engine. This version introduces key optimizations:
+  - **Native GPU Compute Acceleration**: Leverages Vulkan compute shaders and D3D12 compute contexts for high-speed hardware-accelerated encoding/decoding, substantially reducing Celery worker render times.
+  - **Advanced AV1 Support**: Improves encoding efficiency and quality for AV1 outputs, which is highly recommended for modern YouTube uploads.
+  - **Integrated Audio Filters**: Native support for advanced filters (e.g., experimental xHE-AAC, Ambisonic audio elements) that ensure audio normalization and synthetic voice blending remain crystal clear.
+- **MoviePy Integration**:
+  - Since MoviePy wraps around FFmpeg subprocess commands, the path to the system-installed FFmpeg 8.1 binary must be explicitly configured in the container runtime environment by setting the `FFMPEG_BINARY` environment variable (e.g., `os.environ["FFMPEG_BINARY"] = "/usr/bin/ffmpeg"`). This avoids fallback to default downloaded older binaries from package dependencies.
 
 ### Communication Protocols
+
 
 #### 1. Frontend-to-Backend Proxy Gateway
 - The browser clients send all requests directly to the Next.js gateway running on port `3000`/`3030`.
