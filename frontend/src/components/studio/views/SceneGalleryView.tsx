@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useMediaStore } from "@/stores/useMediaStore";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { Image as ImageIcon, Camera, RefreshCw, Search, Plus } from "lucide-react";
+import { Image as ImageIcon, Camera, RefreshCw, Search, Plus, Download, Upload } from "lucide-react";
 
 interface SceneGalleryViewProps {
   onPush?: (prompt: string, action: string) => void;
@@ -117,6 +117,31 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
     setActiveDropdownIndex(null);
   };
 
+  const handleDownloadImage = (url: string, sceneNumber: number) => {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `scene-picture-${sceneNumber}.jpg`;
+    link.target = "_blank";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleUploadImage = (sceneNumber: number, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      const updatedImages = sceneImages.map((img) =>
+        img.sceneNumber === sceneNumber ? { ...img, imageUrl: dataUrl } : img
+      );
+      setSceneImages(updatedImages);
+    };
+    reader.readAsDataURL(file);
+  };
+
   if (sceneImages.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 text-center py-12">
@@ -176,7 +201,26 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
                     </span>
                   </div>
 
-                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
+                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleDownloadImage(scene.imageUrl, scene.sceneNumber)}
+                      title="Download image"
+                      className="p-1.5 rounded-lg bg-black/60 border border-white/10 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors"
+                    >
+                      <Download size={12} />
+                    </button>
+                    <label
+                      title="Upload custom image"
+                      className="p-1.5 rounded-lg bg-black/60 border border-white/10 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors flex items-center justify-center"
+                    >
+                      <Upload size={12} />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleUploadImage(scene.sceneNumber, e)}
+                      />
+                    </label>
                     <button
                       onClick={() => handleRegenerateScene(scene.sceneNumber)}
                       title="Regenerate scene"

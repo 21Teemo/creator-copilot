@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useMediaStore } from "@/stores/useMediaStore";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { Film, Camera, RefreshCw, Search, Plus } from "lucide-react";
+import { Film, Camera, RefreshCw, Search, Plus, Download, Upload } from "lucide-react";
 
 interface SceneVideosViewProps {
   onPush?: (prompt: string, action: string) => void;
@@ -78,6 +78,31 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
     );
     setSceneVideos(updatedVideos);
     setActiveDropdownIndex(null);
+  };
+
+  const handleDownloadVideo = (url: string, sceneNumber: number) => {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `scene-video-${sceneNumber}.mp4`;
+    link.target = "_blank";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleUploadVideo = (sceneNumber: number, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      const updatedVideos = sceneVideos.map((vid) =>
+        vid.sceneNumber === sceneNumber ? { ...vid, videoUrl: dataUrl } : vid
+      );
+      setSceneVideos(updatedVideos);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handlePromptChange = (sceneNumber: number, newPrompt: string) => {
@@ -170,7 +195,26 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
                     </span>
                   </div>
 
-                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
+                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleDownloadVideo(scene.videoUrl, scene.sceneNumber)}
+                      title="Download video"
+                      className="p-1.5 rounded-lg bg-black/60 border border-white/10 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors"
+                    >
+                      <Download size={12} />
+                    </button>
+                    <label
+                      title="Upload custom video"
+                      className="p-1.5 rounded-lg bg-black/60 border border-white/10 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors flex items-center justify-center"
+                    >
+                      <Upload size={12} />
+                      <input
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        onChange={(e) => handleUploadVideo(scene.sceneNumber, e)}
+                      />
+                    </label>
                     <button
                       onClick={() => handleRegenerateVideo(scene.sceneNumber)}
                       title="Regenerate scene video"
