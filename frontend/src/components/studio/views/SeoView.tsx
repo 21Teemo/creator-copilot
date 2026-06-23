@@ -1,24 +1,22 @@
 "use client";
 
 import React, { useState } from "react";
+import { useParams } from "next/navigation";
 import { useSeoStore, PublishStatus } from "@/stores/useSeoStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useMediaStore } from "@/stores/useMediaStore";
+import { apiRequest } from "@/lib/api";
 import { FileSearch, Sparkles, SquarePlay, CheckCircle, AlertCircle, RefreshCw, Download, Upload, Camera } from "lucide-react";
-
-const MOCK_THUMBNAILS = [
-  "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=600&auto=format&fit=crop"
-];
 
 interface SeoViewProps {
   onPublish: () => void;
 }
 
+
 export default function SeoView({ onPublish }: SeoViewProps) {
+  const params = useParams();
+  const projectId = params?.projectId as string;
+
   const {
     titles,
     description,
@@ -93,16 +91,25 @@ export default function SeoView({ onPublish }: SeoViewProps) {
     reader.readAsDataURL(file);
   };
 
-  const handleRegenerateThumbnail = () => {
+  const handleRegenerateThumbnail = async () => {
     if (isRegenerating) return;
     setIsRegenerating(true);
 
-    setTimeout(() => {
-      const candidates = MOCK_THUMBNAILS.filter((url) => url !== activeThumbnail);
-      const randomThumbnail = candidates[Math.floor(Math.random() * candidates.length)];
-      setThumbnailUrl(randomThumbnail);
+    try {
+      const query = selectedTitle || "YouTube Thumbnail";
+      const res = await apiRequest(projectId, "/stock/search", "POST", {
+        prompt: query,
+      });
+      if (res && res.length > 0) {
+        const candidates = res.filter((item: any) => item.imageUrl !== activeThumbnail);
+        const newThumbnail = candidates.length > 0 ? candidates[0].imageUrl : res[0].imageUrl;
+        setThumbnailUrl(newThumbnail);
+      }
+    } catch (err) {
+      console.error("Regenerate thumbnail failed:", err);
+    } finally {
       setIsRegenerating(false);
-    }, 850);
+    }
   };
 
   // Select first title as default once generated

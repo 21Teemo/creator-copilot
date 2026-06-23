@@ -80,7 +80,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     if (hasData) return;
 
     // Generate context descriptions for natural flows
-    const mockPrompts: Record<ActionChipType, string> = {
+    const initialPrompts: Record<ActionChipType, string> = {
       explore_trends: "Scanning for trending topics in my niche...",
       fact_finder: "Performing fact-checking and compiling article briefs...",
       write_script: "Drafting script narration and storyboard outlines...",
@@ -90,7 +90,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       seo_publish: "Optimizing metadata titles and chapter timestamps...",
     };
 
-    await dispatchStudioAction(projectId, action, { prompt: mockPrompts[action] });
+    await dispatchStudioAction(projectId, action, { prompt: initialPrompts[action] });
   };
 
   // 3. Handle selection of suggested welcome chips or stale banners

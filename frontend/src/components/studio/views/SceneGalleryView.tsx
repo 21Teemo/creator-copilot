@@ -1,73 +1,27 @@
 "use client";
 
 import React, { useState } from "react";
+import { useParams } from "next/navigation";
 import { useMediaStore } from "@/stores/useMediaStore";
 import { useProjectStore } from "@/stores/useProjectStore";
+import { apiRequest } from "@/lib/api";
 import { Image as ImageIcon, Camera, RefreshCw, Search, Plus, Download, Upload } from "lucide-react";
 
 interface SceneGalleryViewProps {
   onPush?: (prompt: string, action: string) => void;
 }
 
-// A pool of high-quality alternative coding/technology Unsplash images
-const REGEN_POOL = [
-  "https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1531403009284-440f080d1e12?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1607799279861-4dd421887fb3?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=600&auto=format&fit=crop"
-];
-
-const MOCK_STOCK_PHOTOS = [
-  {
-    title: "Deep Space Nebula wormhole",
-    url: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=600&auto=format&fit=crop",
-    keywords: ["space", "wormhole", "nebula", "galaxy", "stars"]
-  },
-  {
-    title: "Mechanical keyboard backlit keys",
-    url: "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?q=80&w=600&auto=format&fit=crop",
-    keywords: ["keyboard", "typing", "coding", "hands", "developer"]
-  },
-  {
-    title: "Digital matrix data lines",
-    url: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=600&auto=format&fit=crop",
-    keywords: ["server", "lights", "technology", "network", "matrix", "cyberspace", "code"]
-  },
-  {
-    title: "Developer workstation setup",
-    url: "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?q=80&w=600&auto=format&fit=crop",
-    keywords: ["monitor", "coding", "desk", "laptop", "developer", "office"]
-  },
-  {
-    title: "Glowing cybersecurity node network",
-    url: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=600&auto=format&fit=crop",
-    keywords: ["cyber", "security", "nodes", "server", "matrix", "network"]
-  },
-  {
-    title: "Retro green command terminal",
-    url: "https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=600&auto=format&fit=crop",
-    keywords: ["retro", "terminal", "code", "green"]
-  },
-  {
-    title: "City traffic skyline night lapse",
-    url: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=600&auto=format&fit=crop",
-    keywords: ["city", "traffic", "skyline", "night", "timelapse"]
-  },
-  {
-    title: "Raindrops sliding on window glass",
-    url: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=600&auto=format&fit=crop",
-    keywords: ["rain", "window", "drop", "city", "wet"]
-  }
-];
 
 export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
+  const params = useParams();
+  const projectId = params?.projectId as string;
+
   const { sceneImages, setSceneImages } = useMediaStore();
   const contentFormat = useProjectStore((state) => state.contentFormat);
   const [regeneratingScenes, setRegeneratingScenes] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState(MOCK_STOCK_PHOTOS.slice(0, 3));
+  const [searchResults, setSearchResults] = useState<{ title: string; url: string }[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [activeDropdownIndex, setActiveDropdownIndex] = useState<number | null>(null);
 
   const handlePromptChange = (sceneNumber: number, newPrompt: string) => {
@@ -77,36 +31,62 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
     setSceneImages(updatedImages);
   };
 
-  const handleRegenerateScene = (sceneNumber: number) => {
+  const handleRegenerateScene = async (sceneNumber: number) => {
     if (regeneratingScenes.includes(sceneNumber)) return;
     setRegeneratingScenes((prev) => [...prev, sceneNumber]);
 
-    setTimeout(() => {
-      const currentImage = sceneImages.find((img) => img.sceneNumber === sceneNumber)?.imageUrl;
-      const candidates = REGEN_POOL.filter((url) => url !== currentImage);
-      const randomImage = candidates[Math.floor(Math.random() * candidates.length)];
+    try {
+      const currentScene = sceneImages.find((img) => img.sceneNumber === sceneNumber);
+      if (!currentScene) return;
 
-      const updatedImages = sceneImages.map((img) =>
-        img.sceneNumber === sceneNumber ? { ...img, imageUrl: randomImage } : img
-      );
+      const res = await apiRequest(projectId, "/stock/search", "POST", {
+        prompt: currentScene.visualPrompt,
+      });
 
-      setSceneImages(updatedImages);
+      if (res && res.length > 0) {
+        const candidates = res.filter((item: any) => item.imageUrl !== currentScene.imageUrl);
+        const newImage = candidates.length > 0 ? candidates[0].imageUrl : res[0].imageUrl;
+
+        const updatedImages = sceneImages.map((img) =>
+          img.sceneNumber === sceneNumber ? { ...img, imageUrl: newImage } : img
+        );
+
+        setSceneImages(updatedImages);
+      }
+    } catch (err) {
+      console.error("Regenerate scene image failed:", err);
+    } finally {
       setRegeneratingScenes((prev) => prev.filter((num) => num !== sceneNumber));
-    }, 850);
+    }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const q = searchQuery.toLowerCase().trim();
     if (!q) {
-      setSearchResults(MOCK_STOCK_PHOTOS.slice(0, 3));
+      setSearchResults([]);
       return;
     }
-    const filtered = MOCK_STOCK_PHOTOS.filter((item) =>
-      item.title.toLowerCase().includes(q) ||
-      item.keywords.some((k) => k.includes(q))
-    );
-    setSearchResults(filtered);
+    setIsSearching(true);
+    try {
+      const res = await apiRequest(projectId, "/stock/search", "POST", {
+        prompt: q,
+      });
+      if (res && Array.isArray(res)) {
+        const mapped = res.map((item: any) => ({
+          title: item.visualPrompt || "Stock Photo",
+          url: item.imageUrl,
+        }));
+        setSearchResults(mapped);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (err) {
+      console.error("Stock search failed:", err);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const handleAddToScene = (sceneNumber: number, url: string) => {
@@ -290,7 +270,12 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
             </button>
           </form>
 
-          {searchResults.length === 0 ? (
+          {isSearching ? (
+            <div className="p-8 flex items-center justify-center gap-2 text-xs text-studio-text-secondary bg-studio-bg/40 border border-studio-border/30 rounded-2xl">
+              <RefreshCw size={14} className="animate-spin text-accent" />
+              Searching stock libraries...
+            </div>
+          ) : searchResults.length === 0 ? (
             <div className="p-8 text-center text-xs text-studio-text-secondary bg-studio-bg/40 border border-studio-border/30 rounded-2xl">
               No matching stock photos found. Try different keywords.
             </div>

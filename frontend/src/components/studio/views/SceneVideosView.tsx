@@ -1,75 +1,56 @@
 "use client";
 
 import React, { useState } from "react";
+import { useParams } from "next/navigation";
 import { useMediaStore } from "@/stores/useMediaStore";
 import { useProjectStore } from "@/stores/useProjectStore";
+import { apiRequest } from "@/lib/api";
 import { Film, Camera, RefreshCw, Search, Plus, Download, Upload } from "lucide-react";
 
 interface SceneVideosViewProps {
   onPush?: (prompt: string, action: string) => void;
 }
 
-const REGEN_VIDEO_POOL = [
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4"
-];
-
-const MOCK_STOCK_VIDEOS = [
-  {
-    title: "Deep space cosmic nebula clouds",
-    url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-    keywords: ["space", "nebula", "cosmic", "galaxy", "stars", "sci-fi"]
-  },
-  {
-    title: "Cyberpunk neon city transit",
-    url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
-    keywords: ["cyber", "neon", "subway", "train", "speed", "city", "fast", "technology"]
-  },
-  {
-    title: "Scenic mountain road joyride",
-    url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-    keywords: ["car", "road", "mountain", "driving", "nature", "scenic"]
-  },
-  {
-    title: "Roaring bonfire camp night",
-    url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    keywords: ["fire", "fireplace", "warm", "burning", "blaze", "bonfire"]
-  },
-  {
-    title: "Sci-fi holographic computer center",
-    url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-    keywords: ["sci-fi", "space", "station", "cyberpunk", "hologram", "technology", "hacker"]
-  },
-  {
-    title: "People celebrating and cheering",
-    url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-    keywords: ["people", "celebrating", "fun", "friends", "party", "happy"]
-  }
-];
 
 export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
+  const params = useParams();
+  const projectId = params?.projectId as string;
+
   const { sceneVideos, setSceneVideos } = useMediaStore();
   const contentFormat = useProjectStore((state) => state.contentFormat);
   const [regeneratingScenes, setRegeneratingScenes] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState(MOCK_STOCK_VIDEOS.slice(0, 3));
+  const [searchResults, setSearchResults] = useState<{ title: string; url: string }[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [activeDropdownIndex, setActiveDropdownIndex] = useState<number | null>(null);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const q = searchQuery.toLowerCase().trim();
     if (!q) {
-      setSearchResults(MOCK_STOCK_VIDEOS.slice(0, 3));
+      setSearchResults([]);
       return;
     }
-    const filtered = MOCK_STOCK_VIDEOS.filter((item) =>
-      item.title.toLowerCase().includes(q) ||
-      item.keywords.some((k) => k.includes(q))
-    );
-    setSearchResults(filtered);
+    setIsSearching(true);
+    try {
+      const res = await apiRequest(projectId, "/stock/videos", "POST", {
+        prompt: q,
+      });
+      if (res && Array.isArray(res)) {
+        const mapped = res.map((item: any) => ({
+          title: item.visualPrompt || "Stock Video",
+          url: item.videoUrl,
+        }));
+        setSearchResults(mapped);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (err) {
+      console.error("Stock video search failed:", err);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const handleAddToScene = (sceneNumber: number, url: string) => {
@@ -112,22 +93,33 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
     setSceneVideos(updatedVideos);
   };
 
-  const handleRegenerateVideo = (sceneNumber: number) => {
+  const handleRegenerateVideo = async (sceneNumber: number) => {
     if (regeneratingScenes.includes(sceneNumber)) return;
     setRegeneratingScenes((prev) => [...prev, sceneNumber]);
 
-    setTimeout(() => {
-      const currentVideo = sceneVideos.find((vid) => vid.sceneNumber === sceneNumber)?.videoUrl;
-      const candidates = REGEN_VIDEO_POOL.filter((url) => url !== currentVideo);
-      const randomVideo = candidates[Math.floor(Math.random() * candidates.length)];
+    try {
+      const currentScene = sceneVideos.find((vid) => vid.sceneNumber === sceneNumber);
+      if (!currentScene) return;
 
-      const updatedVideos = sceneVideos.map((vid) =>
-        vid.sceneNumber === sceneNumber ? { ...vid, videoUrl: randomVideo } : vid
-      );
+      const res = await apiRequest(projectId, "/stock/videos", "POST", {
+        prompt: currentScene.visualPrompt,
+      });
 
-      setSceneVideos(updatedVideos);
+      if (res && res.length > 0) {
+        const candidates = res.filter((item: any) => item.videoUrl !== currentScene.videoUrl);
+        const newVideo = candidates.length > 0 ? candidates[0].videoUrl : res[0].videoUrl;
+
+        const updatedVideos = sceneVideos.map((vid) =>
+          vid.sceneNumber === sceneNumber ? { ...vid, videoUrl: newVideo } : vid
+        );
+
+        setSceneVideos(updatedVideos);
+      }
+    } catch (err) {
+      console.error("Regenerate scene video failed:", err);
+    } finally {
       setRegeneratingScenes((prev) => prev.filter((num) => num !== sceneNumber));
-    }, 850);
+    }
   };
 
   if (sceneVideos.length === 0) {
@@ -284,7 +276,12 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
             </button>
           </form>
 
-          {searchResults.length === 0 ? (
+          {isSearching ? (
+            <div className="p-8 flex items-center justify-center gap-2 text-xs text-studio-text-secondary bg-studio-bg/40 border border-studio-border/30 rounded-2xl">
+              <RefreshCw size={14} className="animate-spin text-accent" />
+              Searching stock libraries...
+            </div>
+          ) : searchResults.length === 0 ? (
             <div className="p-8 text-center text-xs text-studio-text-secondary bg-studio-bg/40 border border-studio-border/30 rounded-2xl">
               No matching stock video loops found. Try different keywords.
             </div>
