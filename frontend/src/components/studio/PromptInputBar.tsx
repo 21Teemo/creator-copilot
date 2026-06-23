@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useProjectStore } from "@/stores/useProjectStore";
+import { useScriptingStore } from "@/stores/useScriptingStore";
+import { useSeoStore } from "@/stores/useSeoStore";
+import { useMediaStore } from "@/stores/useMediaStore";
 import { ArrowUp, LayoutGrid, Image as ImageIcon, Video, Volume2, User, Smile, Upload } from "lucide-react";
 
 interface PromptInputBarProps {
@@ -23,8 +26,11 @@ export default function PromptInputBar({ onSubmit, disabled }: PromptInputBarPro
   const [prompt, setPrompt] = useState("");
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [activeCategory, setActiveCategory] = useState("all");
+  const [attachedFile, setAttachedFile] = useState<{ name: string; dataUrl: string; type: string } | null>(null);
+  
   const contentFormat = useProjectStore((state) => state.contentFormat);
   const menuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getPlaceholderText = () => {
     if (activeCategory !== "all") {
@@ -36,6 +42,22 @@ export default function PromptInputBar({ onSubmit, disabled }: PromptInputBarPro
       : "Ask to search niche trends, write an outline, compile horizontal videos...";
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAttachedFile({
+        name: file.name,
+        type: file.type,
+        dataUrl: reader.result as string,
+      });
+      setActiveCategory("uploads");
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!prompt.trim() || disabled) return;
@@ -44,8 +66,49 @@ export default function PromptInputBar({ onSubmit, disabled }: PromptInputBarPro
     if (activeCategory !== "all") {
       finalPrompt = `[Category: ${activeCategory}] ${finalPrompt}`;
     }
+
+    if (attachedFile) {
+      finalPrompt = `${finalPrompt} [Uploaded File: ${attachedFile.name}]`;
+      
+      // Client-side file routing to respective stores
+      if (attachedFile.type.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp)$/i.test(attachedFile.name)) {
+        // Update SEO thumbnail and first scene image
+        useSeoStore.getState().setThumbnailUrl(attachedFile.dataUrl);
+        const currentScenes = [...useMediaStore.getState().sceneImages];
+        if (currentScenes.length > 0) {
+          currentScenes[0] = { ...currentScenes[0], imageUrl: attachedFile.dataUrl };
+          useMediaStore.getState().setSceneImages(currentScenes);
+        }
+      } else if (attachedFile.type.startsWith("video/") || /\.(mp4|webm|mov|ogg)$/i.test(attachedFile.name)) {
+        // Update compiled video URL
+        useMediaStore.getState().setVideoUrl(attachedFile.dataUrl);
+      } else if (attachedFile.type.startsWith("text/") || /\.(txt|json|md|rtf)$/i.test(attachedFile.name)) {
+        try {
+          const base64Content = attachedFile.dataUrl.split(",")[1];
+          const binaryString = atob(base64Content);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const decodedText = new TextDecoder().decode(bytes);
+
+          if (attachedFile.name.endsWith(".json")) {
+            const parsed = JSON.parse(decodedText);
+            if (parsed.script) useScriptingStore.getState().setScript(parsed.script);
+            if (parsed.storyboard) useScriptingStore.getState().setStoryboard(parsed.storyboard);
+          } else {
+            useScriptingStore.getState().setScript(decodedText);
+          }
+        } catch (err) {
+          console.error("Failed to decode uploaded text file:", err);
+        }
+      }
+    }
+    
     onSubmit(finalPrompt);
     setPrompt("");
+    setAttachedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -70,6 +133,14 @@ export default function PromptInputBar({ onSubmit, disabled }: PromptInputBarPro
         onSubmit={handleSend}
         className="flex items-center gap-3 bg-studio-surface border border-studio-border rounded-2xl px-4 py-3 shadow-studio focus-within:ring-2 focus-within:ring-accent/50 focus-within:ring-offset-2 focus-within:ring-offset-studio-bg transition-all duration-300"
       >
+        {/* Hidden File Input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
         {/* Attachment Filter Menu Button */}
         <div ref={menuRef} className="relative shrink-0">
           <button
@@ -96,7 +167,11 @@ export default function PromptInputBar({ onSubmit, disabled }: PromptInputBarPro
                     key={cat.id}
                     type="button"
                     onClick={() => {
-                      setActiveCategory(cat.id);
+                      if (cat.id === "uploads") {
+                        fileInputRef.current?.click();
+                      } else {
+                        setActiveCategory(cat.id);
+                      }
                       setShowAttachMenu(false);
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-xs transition-all cursor-pointer ${
@@ -113,6 +188,24 @@ export default function PromptInputBar({ onSubmit, disabled }: PromptInputBarPro
             </div>
           )}
         </div>
+
+        {/* Attached File Badge */}
+        {attachedFile && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-accent/10 border border-accent/25 text-studio-text-primary text-[10px] shrink-0 animate-fade-in">
+            <span className="truncate max-w-[120px] font-semibold">{attachedFile.name}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setAttachedFile(null);
+                setActiveCategory("all");
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+              className="text-studio-text-secondary hover:text-red-400 font-bold ml-1 cursor-pointer transition-colors text-xs"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Text Area Input */}
         <input
