@@ -50,7 +50,7 @@ The backend is a **decoupled, event-driven microservices** stack written in Pyth
 | **ASGI Server** | **Uvicorn** | `^0.49.0` | High-speed server running service processes on ports 8001–8004 |
 | **Task Queue** | **Celery** | `^5.6.0` | Asynchronous task execution for video compile rendering |
 | **Message Broker** | **Redis** | `^8.0` | Message broker and task result backend for Celery (port 6379) |
-| **Media Synthesis** | **MoviePy** | `^1.0.3` | Python library for video editing, compositing, and timeline alignment (FFmpeg wrapper) |
+| **Media Synthesis** | **MoviePy** | `^2.0.0` | Python library for video editing, compositing, and timeline alignment (FFmpeg wrapper) |
 | **Media Processing** | **FFmpeg** | `^8.1` (libx264, aac) | CLI compiler engine for video, audio, and graphics compilation |
 
 ### Media Synthesis & Processing Details (FFmpeg & MoviePy)
@@ -62,6 +62,15 @@ To achieve maximum performance and stability during automated video compilation:
   - **Integrated Audio Filters**: Native support for advanced filters (e.g., experimental xHE-AAC, Ambisonic audio elements) that ensure audio normalization and synthetic voice blending remain crystal clear.
 - **MoviePy Integration**:
   - Since MoviePy wraps around FFmpeg subprocess commands, the path to the system-installed FFmpeg 8.1 binary must be explicitly configured in the container runtime environment by setting the `FFMPEG_BINARY` environment variable (e.g., `os.environ["FFMPEG_BINARY"] = "/usr/bin/ffmpeg"`). This avoids fallback to default downloaded older binaries from package dependencies.
+  - **Modern Imports**: MoviePy v2.0 completely removes the legacy `moviepy.editor` module. Code must import modules directly from the root namespace:
+    ```python
+    # Correct (MoviePy 2.0+)
+    from moviepy import VideoFileClip, AudioFileClip, CompositeVideoClip
+    
+    # Incorrect (Deprecated in 2.0+)
+    # from moviepy.editor import VideoFileClip
+    ```
+
 
 ### Communication Protocols
 
