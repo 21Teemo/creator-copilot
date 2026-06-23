@@ -163,6 +163,175 @@ services/
 - **Auth:** TBD (project-scoped; add middleware per deployment)
 - **Error shape:** Consistent JSON `{ detail: string }` across services (FastAPI default)
 
+### Base Payload Wrapper
+Every POST request sent by the frontend automatically includes the following global context fields:
+```json
+{
+  "contentFormat": "long" | "short",
+  "includeAudio": boolean
+}
+```
+
+### JSON Request / Response Schemas
+
+#### 1. Research Service (`:8001`)
+* **`POST /research/trends/short` & `POST /research/trends/long`**
+  - **Request Body**: `{ "prompt": string }`
+  - **Response Body**: `TrendItem[]` where `TrendItem` is:
+    ```json
+    {
+      "title": string,
+      "views": string,
+      "duration": string,
+      "description": string,
+      "channelName": string,
+      "publishedAt": string
+    }
+    ```
+* **`POST /research/summarize`**
+  - **Request Body**: `{ "prompt": string }`
+  - **Response Body**:
+    ```json
+    {
+      "summaryText": string,
+      "sources": [
+        {
+          "title": string,
+          "url": string,
+          "snippet": string // optional
+        }
+      ]
+    }
+    ```
+* **`POST /research/web-search`**
+  - **Request Body**: `{ "prompt": string }`
+  - **Response Body**:
+    ```json
+    {
+      "sources": [
+        {
+          "title": string,
+          "url": string,
+          "snippet": string // optional
+        }
+      ]
+    }
+    ```
+
+#### 2. Scripting Service (`:8002`)
+* **`POST /scripting/storyboard`**
+  - **Request Body**: `{ "prompt": string }`
+  - **Response Body**:
+    ```json
+    {
+      "script": string,
+      "outline": [
+        {
+          "sectionTitle": string,
+          "durationSeconds": number,
+          "talkingPoints": string[]
+        }
+      ],
+      "storyboard": [
+        {
+          "sceneNumber": number,
+          "visualPrompt": string,
+          "narrationText": string
+        }
+      ]
+    }
+    ```
+* **`POST /thumbnails/:assetId/grade`**
+  - **Request Body**: `{ "prompt": string, "imageUrl": string }`
+  - **Response Body**:
+    ```json
+    {
+      "ctrScore": number, // 0 to 100
+      "feedback": string
+    }
+    ```
+
+#### 3. Media Service (`:8003`)
+* **`POST /stock/search`** (Images search)
+  - **Request Body**: `{ "prompt": string }`
+  - **Response Body**:
+    ```json
+    [
+      {
+        "sceneNumber": number,
+        "imageUrl": string,
+        "visualPrompt": string
+      }
+    ]
+    ```
+* **`POST /stock/videos`** (Video search)
+  - **Request Body**: `{ "prompt": string }`
+  - **Response Body**:
+    ```json
+    [
+      {
+        "sceneNumber": number,
+        "videoUrl": string,
+        "visualPrompt": string
+      }
+    ]
+    ```
+* **`POST /video/render`**
+  - **Request Body**:
+    ```json
+    {
+      "storyboard": [
+        {
+          "sceneNumber": number,
+          "visualPrompt": string,
+          "narrationText": string
+        }
+      ]
+    }
+    ```
+  - **Response Body**: `{ "taskId": string }`
+* **`GET /video/render/:taskId/status`**
+  - **Response Body**:
+    ```json
+    {
+      "status": "idle" | "pending" | "in_progress" | "complete" | "failed",
+      "progress": number, // 0 to 100
+      "videoUrl": string | null
+    }
+    ```
+
+#### 4. SEO Service (`:8004`)
+* **`POST /seo/titles`**
+  - **Request Body**: `{}`
+  - **Response Body**: `{ "titles": string[] }`
+* **`POST /seo/metadata`**
+  - **Request Body**: `{}`
+  - **Response Body**:
+    ```json
+    {
+      "description": string,
+      "tags": string[],
+      "chapters": [
+        {
+          "timestamp": string,
+          "title": string
+        }
+      ]
+    }
+    ```
+* **`POST /publish`**
+  - **Request Body**:
+    ```json
+    {
+      "title": string,
+      "description": string,
+      "tags": string[],
+      "videoUrl": string,
+      "thumbnailUrl": string
+    }
+    ```
+  - **Response Body**: `{ "publishedUrl": string }`
+
 Full route map: [API Routing](./api-routing.md)
 
 ---
