@@ -66,11 +66,15 @@ Endpoints are grouped below by **creator workflow stage**.
 
 **Service:** `http://127.0.0.1:8003` + Celery worker
 
-### Stock / B-roll Search
+### Stock Sourcing Search
 
 `POST /api/v1/projects/:projectId/stock/search`
 
-- Searches stock libraries for footage and images matching project context
+- Searches stock image libraries (Unsplash, Pixabay) for pictures matching project context
+
+`POST /api/v1/projects/:projectId/stock/videos`
+
+- Searches stock video libraries (Pexels, Pixabay) for video clips matching project context
 
 ### Thumbnail Builder (FLUX / Imagen)
 
@@ -143,6 +147,7 @@ VO synthesis integrated in the render pipeline (ElevenLabs API).
 | 2 | POST | `/scripting/storyboard` | No |
 | 2 | POST | `/thumbnails/:assetId/grade` | No |
 | 3 | POST | `/stock/search` | No |
+| 3 | POST | `/stock/videos` | No |
 | 3 | POST | `/video/render` | **Yes** (Celery) |
 | 3 | GET | `/video/render/:taskId/status` | — (poll) |
 | 4 | POST | `/seo/titles` | No |

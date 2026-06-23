@@ -71,9 +71,8 @@ Each service runs via **uvicorn** in its own directory under `services/`.
 
 ### Media Service (`services/media/`)
 
-| Module | Endpoint | Integration |
-|--------|----------|-------------|
-| Stock / b-roll search | `POST /stock/search` | Stock APIs |
+| Stock image search | `POST /stock/search` | Unsplash / Pixabay APIs |
+| Stock video search | `POST /stock/videos` | Pexels / Pixabay APIs |
 | Thumbnail Builder | (render pipeline) | FLUX / Imagen |
 | Voice Synthesis | (render pipeline) | ElevenLabs API |
 | FFmpeg Video Compilation | `POST /video/render`, `GET /video/render/:taskId/status` | Celery + FFmpeg |
@@ -189,4 +188,5 @@ Full route map: [API Routing](./api-routing.md)
 | FLUX / Imagen | Media | Thumbnail image generation |
 | ElevenLabs | Media | Text-to-speech for VO |
 | FFmpeg | Celery worker | Video compilation |
+| Pexels & Pixabay | Media | Stock image & video clip sourcing |
 | YouTube API | SEO | Draft upload / publish |
