@@ -100,28 +100,10 @@ export default function VideoView({ onPush }: VideoViewProps) {
               <h3 className="text-xs font-bold text-studio-text-secondary uppercase tracking-wider">
                 Active Project Preview ({contentFormat === "short" ? "Vertical 9:16" : "Horizontal 16:9"})
               </h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleDownloadVideo}
-                  title="Download final video"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-studio-surface border border-studio-border/60 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors text-[10px] font-bold uppercase tracking-wider"
-                >
-                  <Download size={12} />
-                  Download
-                </button>
-                <button
-                  onClick={handleRegenerateVideo}
-                  title="Regenerate final compilation"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-studio-surface border border-studio-border/60 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors text-[10px] font-bold uppercase tracking-wider"
-                >
-                  <RefreshCw size={12} />
-                  Regenerate
-                </button>
-              </div>
             </div>
             
             <div
-              className={`relative bg-black rounded-2xl overflow-hidden border border-studio-border/80 shadow-studio flex items-center justify-center flex-1 min-h-0 ${
+              className={`relative bg-black rounded-2xl overflow-hidden border border-studio-border/80 shadow-studio flex items-center justify-center flex-1 min-h-0 group ${
                 contentFormat === "short"
                   ? "h-[50vh] aspect-[9/16]"
                   : "w-full aspect-video max-h-[50vh]"
@@ -133,6 +115,24 @@ export default function VideoView({ onPush }: VideoViewProps) {
                 className="w-full h-full object-contain"
                 poster="/next.svg" /* Fallback thumbnail */
               />
+
+              {/* Overlay controls inside video frame on hover */}
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center gap-1.5">
+                <button
+                  onClick={handleDownloadVideo}
+                  title="Download final video"
+                  className="p-1.5 rounded-lg bg-black/60 border border-white/10 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors"
+                >
+                  <Download size={12} />
+                </button>
+                <button
+                  onClick={handleRegenerateVideo}
+                  title="Regenerate final compilation"
+                  className="p-1.5 rounded-lg bg-black/60 border border-white/10 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors"
+                >
+                  <RefreshCw size={12} />
+                </button>
+              </div>
             </div>
 
             {onPush && (
