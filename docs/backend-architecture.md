@@ -47,7 +47,7 @@ The backend is a **decoupled, event-driven microservices** stack written in Pyth
 | **Runtime Environment** | **Python** | `3.12.x` | Base runtime for all backend microservices and celery workers |
 | **API Framework** | **FastAPI** | `^0.138.0` | ASGI framework for building high-performance REST APIs |
 | **Data Validation** | **Pydantic v2** | `^2.13.0` | JSON request/response schema parsing and type-safety validation |
-| **ASGI Server** | **Uvicorn** | `^0.22.0` | High-speed server running service processes on ports 8001–8004 |
+| **ASGI Server** | **Uvicorn** | `^0.49.0` | High-speed server running service processes on ports 8001–8004 |
 | **Task Queue** | **Celery** | `^5.3.0` | Asynchronous task execution for video compile rendering |
 | **Message Broker** | **Redis** | `^7.0` | Message broker and task result backend for Celery (port 6379) |
 | **Media Synthesis** | **MoviePy** | `^1.0.3` | Python library for video editing, compositing, and timeline alignment (FFmpeg wrapper) |
