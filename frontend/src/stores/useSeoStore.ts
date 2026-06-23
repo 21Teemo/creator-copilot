@@ -15,12 +15,14 @@ interface SeoState {
   chapters: ChapterItem[];
   publishedUrl: string | null;
   publishStatus: PublishStatus;
+  thumbnailUrl: string | null;
   setTitles: (titles: string[]) => void;
   setDescription: (description: string) => void;
   setTags: (tags: string[]) => void;
   setChapters: (chapters: ChapterItem[]) => void;
   setPublishedUrl: (url: string | null) => void;
   setPublishStatus: (status: PublishStatus) => void;
+  setThumbnailUrl: (url: string | null) => void;
   clearSeo: () => void;
 }
 
@@ -33,12 +35,14 @@ export const useSeoStore = create<SeoState>()(
       chapters: [],
       publishedUrl: null,
       publishStatus: "idle",
+      thumbnailUrl: null,
       setTitles: (titles) => set({ titles }),
       setDescription: (description) => set({ description }),
       setTags: (tags) => set({ tags }),
       setChapters: (chapters) => set({ chapters }),
       setPublishedUrl: (publishedUrl) => set({ publishedUrl }),
       setPublishStatus: (publishStatus) => set({ publishStatus }),
+      setThumbnailUrl: (thumbnailUrl) => set({ thumbnailUrl }),
       clearSeo: () =>
         set({
           titles: [],
@@ -47,6 +51,7 @@ export const useSeoStore = create<SeoState>()(
           chapters: [],
           publishedUrl: null,
           publishStatus: "idle",
+          thumbnailUrl: null,
         }),
     }),
     {

@@ -3,7 +3,16 @@
 import React, { useState } from "react";
 import { useSeoStore, PublishStatus } from "@/stores/useSeoStore";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { FileSearch, Sparkles, SquarePlay, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { useMediaStore } from "@/stores/useMediaStore";
+import { FileSearch, Sparkles, SquarePlay, CheckCircle, AlertCircle, RefreshCw, Download, Upload } from "lucide-react";
+
+const MOCK_THUMBNAILS = [
+  "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=600&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=600&auto=format&fit=crop"
+];
 
 interface SeoViewProps {
   onPublish: () => void;
@@ -18,10 +27,49 @@ export default function SeoView({ onPublish }: SeoViewProps) {
     publishStatus,
     publishedUrl,
     setDescription,
+    thumbnailUrl,
+    setThumbnailUrl,
   } = useSeoStore();
   const contentFormat = useProjectStore((state) => state.contentFormat);
+  const { sceneImages } = useMediaStore();
 
   const [selectedTitle, setSelectedTitle] = useState<string>("");
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  const activeThumbnail = thumbnailUrl || sceneImages[0]?.imageUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop";
+
+  const handleDownloadThumbnail = () => {
+    const link = document.createElement("a");
+    link.href = activeThumbnail;
+    link.download = `project-thumbnail.jpg`;
+    link.target = "_blank";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleUploadThumbnail = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setThumbnailUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRegenerateThumbnail = () => {
+    if (isRegenerating) return;
+    setIsRegenerating(true);
+
+    setTimeout(() => {
+      const candidates = MOCK_THUMBNAILS.filter((url) => url !== activeThumbnail);
+      const randomThumbnail = candidates[Math.floor(Math.random() * candidates.length)];
+      setThumbnailUrl(randomThumbnail);
+      setIsRegenerating(false);
+    }, 850);
+  };
 
   // Select first title as default once generated
   React.useEffect(() => {
@@ -115,6 +163,72 @@ export default function SeoView({ onPublish }: SeoViewProps) {
             </div>
             
             <div className="p-4 flex-1 overflow-y-auto space-y-4">
+              {/* Video Thumbnail Section */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-bold text-studio-text-secondary uppercase tracking-wider">
+                  Video Thumbnail
+                </span>
+                <div
+                  className={`relative bg-studio-bg rounded-xl overflow-hidden border border-studio-border/60 group ${
+                    contentFormat === "short" ? "aspect-[9/16] w-36 mx-auto" : "w-full aspect-[16/9]"
+                  }`}
+                >
+                  <div
+                    className="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-105"
+                    style={{ backgroundImage: `url(${activeThumbnail})` }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+
+                  {/* Top Badge */}
+                  <div className="absolute top-2 left-2 z-20">
+                    <span className="text-[9px] font-bold text-studio-text-primary px-2 py-0.5 rounded-full bg-studio-surface/85 border border-studio-border/60 uppercase tracking-wider">
+                      Preview Thumbnail
+                    </span>
+                  </div>
+
+                  {/* Hover actions inside card */}
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center gap-1.5">
+                    <button
+                      onClick={handleDownloadThumbnail}
+                      title="Download thumbnail"
+                      className="p-1.5 rounded-lg bg-black/60 border border-white/10 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors"
+                    >
+                      <Download size={12} />
+                    </button>
+                    <label
+                      title="Upload custom thumbnail"
+                      className="p-1.5 rounded-lg bg-black/60 border border-white/10 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors flex items-center justify-center"
+                    >
+                      <Upload size={12} />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleUploadThumbnail}
+                      />
+                    </label>
+                    <button
+                      onClick={handleRegenerateThumbnail}
+                      title="Regenerate thumbnail"
+                      className="p-1.5 rounded-lg bg-black/60 border border-white/10 hover:border-accent/40 text-studio-text-secondary hover:text-accent cursor-pointer transition-colors"
+                      disabled={isRegenerating}
+                    >
+                      <RefreshCw size={12} className={isRegenerating ? "animate-spin text-accent" : ""} />
+                    </button>
+                  </div>
+
+                  {/* Loading spinner */}
+                  {isRegenerating && (
+                    <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-2 z-10 backdrop-blur-sm animate-fade-in">
+                      <RefreshCw size={16} className="text-accent animate-spin" />
+                      <span className="text-[9px] font-bold text-studio-text-secondary uppercase tracking-wider">
+                        Generating...
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Chapters list */}
               {chapters.length > 0 && (
                 <div className="space-y-2">
