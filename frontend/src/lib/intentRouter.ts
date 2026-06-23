@@ -30,13 +30,19 @@ export function classifyIntent(prompt: string, activeView: StudioView): StudioAc
 
   if (isRefine) return "refine";
 
+  // Category filter routing
+  if (p.includes("category: images")) return "scene_pictures";
+  if (p.includes("category: videos")) return "scene_videos";
+  if (p.includes("category: voices") || p.includes("category: characters") || p.includes("category: avatar")) return "write_script";
+  if (p.includes("category: uploads")) return "seo_publish";
+
   if (p.includes("trend") || p.includes("explore") || p.includes("niche") || p.includes("viral")) {
     return "explore_trends";
   }
   if (p.includes("fact") || p.includes("search") || p.includes("find") || p.includes("summar")) {
     return "fact_finder";
   }
-  if (p.includes("script") || p.includes("write") || p.includes("draft") || p.includes("storyboard")) {
+  if (p.includes("script") || p.includes("write") || p.includes("draft") || p.includes("storyboard") || p.includes("voice") || p.includes("character") || p.includes("avatar")) {
     return "write_script";
   }
   if (p.includes("picture") || p.includes("image") || p.includes("photo")) {
