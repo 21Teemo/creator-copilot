@@ -44,9 +44,8 @@ The backend is a **decoupled, event-driven microservices** stack written in Pyth
 ## Technology Stack & Communication
 
 | Component | Technology | Version / Spec | Role |
-|-----------|------------|----------------|------|
-| **Runtime Environment** | **Python** | `3.11.x` | Base runtime for all backend microservices and celery workers |
-| **API Framework** | **FastAPI** | `^0.100.0` | ASGI framework for building high-performance REST APIs |
+| **Runtime Environment** | **Python** | `3.12.x` | Base runtime for all backend microservices and celery workers |
+| **API Framework** | **FastAPI** | `^0.138.0` | ASGI framework for building high-performance REST APIs |
 | **Data Validation** | **Pydantic v2** | `^2.0` | JSON request/response schema parsing and type-safety validation |
 | **ASGI Server** | **Uvicorn** | `^0.22.0` | High-speed server running service processes on ports 8001–8004 |
 | **Task Queue** | **Celery** | `^5.3.0` | Asynchronous task execution for video compile rendering |
