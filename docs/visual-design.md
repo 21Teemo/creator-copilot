@@ -165,9 +165,11 @@ Feels like a real creative canvas — elevated from the shell, sized to availabl
 
 **Per view (all use internal scroll wrapper):**
 - `script` — readable column, `max-w-3xl` centered, off-white text, `overflow-y-auto`
-- `scenes` — grid with `gap-4`, rounded-2xl image cards, scrollable gallery
-- `video` — 16:9 or 9:16 player with aspect-ratio container matching Content Format
-- `trends` / `facts` / `seo` — card/list content scrolls inside panel
+- `scenes` — grid with `gap-4`, rounded-2xl image cards. Includes custom upload buttons, download anchors, individual regeneration spinners, and a scrolling stock drawer at the bottom.
+- `video` — 16:9 or 9:16 video compilation storyboard gallery. Includes custom uploads, download triggers, and stock drawer search panels.
+- `ffmpeg` — 16:9 or 9:16 render output video player. Features a clean, hover-triggered control overlay (Download and Regenerate buttons) positioned directly inside the top-right corner of the video frame.
+- `trends` / `facts` — card/list content scrolls inside panel.
+- `seo` — structured metadata publisher. Includes title cards (with Copy trigger), description editor (with Copy Description button), tag pills (with `#` prefix individual and Copy All triggers), and a thumbnail preview card with hover action overlays (download, upload, regenerate) and prompt editor.
 - Loading — skeleton shimmer inside frame (`animate-pulse` on `#27272A` blocks)
 
 ### Pipeline Navigation (floating pill)
@@ -208,7 +210,7 @@ All **six pipeline steps always visible** in fixed sequential order:
 | Focus | `ring-2 ring-[var(--accent)]/50 ring-offset-2 ring-offset-[#0F0F12]` |
 | Padding | `px-4 py-3` |
 
-Chat-like, familiar — `+` left, placeholder center, send arrow right.
+Chat-like, familiar — `Upload` icon on the left (opens native file picker directly), text placeholder center, and send arrow on the right. Attached files render as a capsule filename badge with a `×` dismiss option inside the bar.
 
 ---
 
@@ -244,11 +246,11 @@ shadow-2xl  → Pipeline Navigation floating pill
 │  └───────────────────────────────────────────────────────┘  │
 │              Content Format  [ Long ▎ Short ]               │  shrink-0 dock
 │         ╭─────────────────────────────────────────────────╮ │
-│         │ Trends → Facts → Script → Scenes → Video → SEO │ │
+│         │ Trends → Facts → Script → Scenes → Video → SEO  │ │
 │         │                                    [Add Audio ●]│ │
 │         ╰─────────────────────────────────────────────────╯ │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │  +  │  What do you want to do next?              →  │  │
+│  │ [Upload] │  What do you want to do next?         →  │  │
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```

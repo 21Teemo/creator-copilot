@@ -85,27 +85,25 @@ Minimal chrome. **Project name only** — no format control here. Keeps the top 
 
 **The Output Frame is always the star.** It dynamically fills **all remaining height** between the header and bottom dock (`flex-1 min-h-0`) and shows exactly one primary view at a time.
 
-| View mode | Renders when | Content |
-|-----------|--------------|---------|
+| View mode | Renders when | Content / Features |
+|-----------|--------------|-------------------|
 | `welcome` | New / empty project | Content Format explanation, suggested first prompt |
 | `trends` | Trend exploration | Card grid of trend results (format-aware) |
 | `facts` | Fact finding / summarize | Summaries, source citations |
-| `script` | Script written or editing | Full **inline-editable** script, word count, format-aware targets |
-| `scenes` | Scene pictures generated | Image gallery grid, multi-scene layout |
-| `video` | Scene videos / final render | Video player(s), render progress |
-| `seo` | SEO & publish | Title candidates, metadata, publish status |
+| `script` | Script written or editing | Controlled inline-editable script, word count, and real-time outline segment syncing. |
+| `scenes` | Scene pictures generated | Image gallery grid. Supports downloading scenes (`.jpg`), custom client-side uploads (`FileReader` data URLs), individual card regeneration, and a Pexels & Pixabay stock search drawer. |
+| `video` | Scene videos / compiling | Storyboard video timeline compilation. Supports downloading clips (`.mp4`), custom client-side uploads, individual video clip regeneration, and a Pexels & Pixabay stock search drawer. |
+| `ffmpeg` | Video rendering | Full rendering progress view with dynamic polling. Final video player contains a hover actions overlay (Download and Regenerate) positioned directly inside the video player frame. |
+| `seo` | SEO & publish | Title candidates (with copy click handler), YouTube description (with copy button in section header), metadata tags (with Individual and Copy All hashtag actions prepending `#`), and a thumbnail preview card (16:9/9:16 aspect) with hover overlays (download, upload, regenerate) and a persistent editable prompt caption. |
 
-| View mode | Status | Notes |
-|-----------|--------|-------|
-| `media-lab` | **Future** | Thumbnail grading, stock search — not part of the primary pipeline |
+**Component:** `OutputFrame` — switches on `useStudioStore.activeView`. Sub-components per mode (`TrendsView`, `ScriptView`, `SceneGalleryView`, `SceneVideosView`, `VideoView`, `SeoView`).
 
-**Component:** `OutputFrame` — switches on `useStudioStore.activeView`. Sub-components per mode (`TrendsView`, `ScriptView`, `SceneGalleryView`, etc.).
-
-**Inline editing (script view):**
-- `ScriptView` renders a contenteditable or controlled `<textarea>` bound to `useScriptingStore.script`.
-- User edits directly in the Output Frame — no separate editor panel.
-- Manual edits write to the store immediately (debounced persist).
-- NL refinement ("make the script darker") calls `refine` → API → **replaces** store content → frame re-renders with diff highlight (optional flash).
+**Inline editing & real-time sync (script view):**
+- `ScriptView` renders a controlled `<textarea>` bound to `useScriptingStore.script`.
+- User edits directly in the Output Frame. Word and character counts update in real-time.
+- Manual script narration edits are dynamically parsed to automatically update and sync the Storyboard Outline segments and style tags in the store.
+- Manual edits write to the store immediately.
+- NL refinement ("make the script darker") calls `refine` → API → **replaces** store content → frame re-renders with the updated outline.
 - User can also click **Write Script** again to full re-generate from upstream research (confirms if script has manual edits).
 
 **Rules:**
@@ -200,17 +198,23 @@ Bottom-fixed within the flex column (`ControlDock` + `shrink-0`), not document s
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  +  │  What do you want to do next?                  →  │
+│ [Upload] │  What do you want to do next?             →  │
 └──────────────────────────────────────────────────────────┘
 ```
 
 | Part | Behavior |
 |------|----------|
-| `+` | Attach URL, upload asset, paste YouTube link |
-| Text field | Natural language — "make the script darker", "generate 6 scene images", "add voiceover" |
-| `→` Send | Submit prompt to intent router |
+| `Upload` (icon) | Direct trigger for browser file selection. Supports image, video, script/text, and JSON attachments. |
+| Attachment Badge | Renders the filename of the attached asset with a "×" remove trigger once selected. |
+| Text field | Natural language — "make the script darker", "generate 6 scene images", "add voiceover". |
+| `→` Send | Submit prompt & attachment metadata to the intent router. |
 
 **Component:** `PromptInputBar` — on submit, calls `lib/intentRouter.ts` which maps NL → action + API call + `activeView` update.
+
+**Auto-routing and Store Integration:**
+- Attaching a local file automatically prepends a category tag prefix (e.g. `[Category: images]`) based on its file extension/type.
+- The intent router (`intentRouter.ts`) processes these tags to instantly navigate the UI to the correct view (e.g., `images` category maps to `scene_pictures`).
+- File contents sync directly to state stores client-side upon prompt submission (e.g., text/JSON uploads replace narration scripts, images override thumbnails, videos override compile previews).
 
 Users can **type or click** pipeline steps — both paths hit the same action handlers.
 
