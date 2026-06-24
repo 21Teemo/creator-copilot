@@ -63,15 +63,13 @@ export default function TrendsView({ onPush }: TrendsViewProps) {
               className="flex flex-col rounded-2xl bg-studio-surface border border-studio-border/60 overflow-hidden hover:border-accent/40 hover:shadow-studio transition-all duration-200"
             >
               {/* Thumbnail Container */}
-              <div
-                className={`relative bg-studio-bg overflow-hidden group/thumb cursor-pointer ${
+              <a
+                href={item.videoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`relative block bg-studio-bg overflow-hidden group/thumb cursor-pointer ${
                   contentFormat === "short" ? "aspect-[9/16]" : "aspect-[16/9]"
                 }`}
-                onClick={() => {
-                  if (item.videoUrl) {
-                    window.open(item.videoUrl, "_blank", "noopener,noreferrer");
-                  }
-                }}
               >
                 {/* YouTube thumbnail image */}
                 {item.thumbnailUrl ? (
@@ -122,7 +120,7 @@ export default function TrendsView({ onPush }: TrendsViewProps) {
                 <div className="absolute top-2 left-2 w-5 h-5 flex items-center justify-center rounded-full bg-studio-surface/80 border border-studio-border/50 text-[10px] font-bold text-accent">
                   {index + 1}
                 </div>
-              </div>
+              </a>
 
               {/* Card Details */}
               <div className="p-3.5 flex flex-col flex-1">
