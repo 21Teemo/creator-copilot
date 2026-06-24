@@ -125,8 +125,11 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
   if (sceneVideos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 text-center py-12">
-        <Film size={40} className="text-studio-text-secondary animate-pulse mb-4" />
-        <p className="text-sm text-studio-text-secondary">No scene videos generated yet. Run Scene Videos first.</p>
+        <Film size={40} className="text-studio-text-secondary mb-4" />
+        <p className="text-sm text-studio-text-primary font-bold mb-1">No scene videos generated yet</p>
+        <p className="text-xs text-studio-text-secondary max-w-sm">
+          Click the "Scene Videos" control below or use the prompt bar to generate custom video clips for each storyboard frame.
+        </p>
       </div>
     );
   }

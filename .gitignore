@@ -17,3 +17,18 @@ Thumbs.db
 
 # typescript build info
 **/*.tsbuildinfo
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/venv/
+services/media/static/*.mp4
+services/scratch/
+
+# IDEs
+.idea/
+
+# macOS metadata
+**/._*
+
+

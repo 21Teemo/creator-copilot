@@ -36,7 +36,10 @@ export default function VideoView({ onPush }: VideoViewProps) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 text-center py-12">
         <Film size={40} className="text-studio-text-secondary mb-4" />
-        <p className="text-sm text-studio-text-secondary">No video rendered yet. Run FFmpeg Render to assemble.</p>
+        <p className="text-sm text-studio-text-primary font-bold mb-1">No video rendered yet</p>
+        <p className="text-xs text-studio-text-secondary max-w-sm">
+          Click the "FFmpeg Render" control below or use the prompt bar to compile and assemble the final video.
+        </p>
       </div>
     );
   }

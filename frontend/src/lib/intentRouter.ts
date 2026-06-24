@@ -16,6 +16,13 @@ export type StudioAction = ActionChipType | "refine";
 export function classifyIntent(prompt: string, activeView: StudioView): StudioAction {
   const p = prompt.toLowerCase();
 
+  // 1. YouTube URL routing helper
+  const isYoutubeUrl = p.includes("youtube.com/") || p.includes("youtu.be/");
+  if (isYoutubeUrl) {
+    if (activeView === "facts") return "fact_finder";
+    return "explore_trends";
+  }
+
   // Keywords indicating manual refinement/edits
   const refinementKeywords = [
     "make", "shorter", "darker", "longer", "add", "change", "edit", 
@@ -35,6 +42,26 @@ export function classifyIntent(prompt: string, activeView: StudioView): StudioAc
   if (p.includes("category: videos")) return "scene_videos";
   if (p.includes("category: voices") || p.includes("category: characters") || p.includes("category: avatar")) return "write_script";
   if (p.includes("category: uploads")) return "seo_publish";
+
+  // If user is currently on the trends or facts view, keep general queries focused on search.
+  // Only transition downstream if they explicitly use high-intent action words.
+  if (activeView === "trends") {
+    if (p.includes("write script") || p.includes("generate script") || p.includes("draft script")) return "write_script";
+    if (p.includes("generate picture") || p.includes("generate image") || p.includes("create scenes")) return "scene_pictures";
+    if (p.includes("generate video") || p.includes("create video")) return "scene_videos";
+    if (p.includes("render video") || p.includes("compile video") || p.includes("ffmpeg")) return "ffmpeg_render";
+    if (p.includes("seo") || p.includes("publish")) return "seo_publish";
+    return "explore_trends";
+  }
+
+  if (activeView === "facts") {
+    if (p.includes("write script") || p.includes("generate script") || p.includes("draft script")) return "write_script";
+    if (p.includes("generate picture") || p.includes("generate image") || p.includes("create scenes")) return "scene_pictures";
+    if (p.includes("generate video") || p.includes("create video")) return "scene_videos";
+    if (p.includes("render video") || p.includes("compile video") || p.includes("ffmpeg")) return "ffmpeg_render";
+    if (p.includes("seo") || p.includes("publish")) return "seo_publish";
+    return "fact_finder";
+  }
 
   if (p.includes("trend") || p.includes("explore") || p.includes("niche") || p.includes("viral")) {
     return "explore_trends";
@@ -56,6 +83,21 @@ export function classifyIntent(prompt: string, activeView: StudioView): StudioAc
   }
   if (p.includes("seo") || p.includes("title") || p.includes("publish") || p.includes("upload")) {
     return "seo_publish";
+  }
+
+  // Context-aware mapping: if user is on a content-authoring view, route general prompts to that view's action.
+  // ffmpeg and seo are excluded — they are output/status views where freeform text input
+  // should be routed by content keywords or the store-based fallback, not kept on the same view.
+  const viewToActionMap: Record<string, StudioAction> = {
+    trends: "explore_trends",
+    facts: "fact_finder",
+    script: "write_script",
+    scenes: "scene_pictures",
+    video: "scene_videos",
+  };
+
+  if (activeView && viewToActionMap[activeView]) {
+    return viewToActionMap[activeView];
   }
 
   // Fallback map based on what steps are missing
@@ -188,9 +230,14 @@ export async function dispatchStudioAction(
       case "ffmpeg_render": {
         studioStore.setActiveView("ffmpeg");
         const mediaStore = useMediaStore.getState();
+        const scriptingStore = useScriptingStore.getState();
         
         // Start Render
-        const renderRes = await apiRequest(projectId, "/video/render", "POST");
+        const renderRes = await apiRequest(projectId, "/video/render", "POST", {
+          storyboard: scriptingStore.storyboard,
+          sceneImages: mediaStore.sceneImages,
+          sceneVideos: mediaStore.sceneVideos,
+        });
         mediaStore.setTaskId(renderRes.taskId);
         mediaStore.setRenderStatus("pending");
         mediaStore.setRenderProgress(0);
@@ -201,8 +248,9 @@ export async function dispatchStudioAction(
       }
       case "seo_publish": {
         studioStore.setActiveView("seo");
-        const titleRes = await apiRequest(projectId, "/seo/titles", "POST");
-        const metaRes = await apiRequest(projectId, "/seo/metadata", "POST");
+        const scriptingStore = useScriptingStore.getState();
+        const titleRes = await apiRequest(projectId, "/seo/titles", "POST", { script: scriptingStore.script });
+        const metaRes = await apiRequest(projectId, "/seo/metadata", "POST", { script: scriptingStore.script });
         
         useSeoStore.getState().setTitles(titleRes.titles);
         useSeoStore.getState().setDescription(metaRes.description);

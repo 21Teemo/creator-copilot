@@ -14,8 +14,11 @@ export default function FactsView({ onPush }: FactsViewProps) {
   if (!summaries) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 text-center py-12">
-        <Search size={40} className="text-studio-text-secondary animate-pulse mb-4" />
-        <p className="text-sm text-studio-text-secondary">No facts data available. Run Fact Finder first.</p>
+        <Search size={40} className="text-studio-text-secondary mb-4" />
+        <p className="text-sm text-studio-text-primary font-bold mb-1">No research facts available</p>
+        <p className="text-xs text-studio-text-secondary max-w-sm">
+          Enter a topic or paste a YouTube URL in the prompt bar below to gather verified research facts and summarize content.
+        </p>
       </div>
     );
   }

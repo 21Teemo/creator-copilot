@@ -26,8 +26,11 @@ export default function ScriptView({ onPush }: ScriptViewProps) {
   if (!script) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 text-center py-12">
-        <FileText size={40} className="text-studio-text-secondary animate-pulse mb-4" />
-        <p className="text-sm text-studio-text-secondary">No script has been generated yet. Run Write Script first.</p>
+        <FileText size={40} className="text-studio-text-secondary mb-4" />
+        <p className="text-sm text-studio-text-primary font-bold mb-1">No script generated yet</p>
+        <p className="text-xs text-studio-text-secondary max-w-sm">
+          Click the "Write Script" control below or type in the prompt bar to draft script narration and storyboard outlines.
+        </p>
       </div>
     );
   }

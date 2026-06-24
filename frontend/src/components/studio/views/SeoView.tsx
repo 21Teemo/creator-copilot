@@ -122,8 +122,11 @@ export default function SeoView({ onPublish }: SeoViewProps) {
   if (titles.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 text-center py-12">
-        <FileSearch size={40} className="text-studio-text-secondary animate-pulse mb-4" />
-        <p className="text-sm text-studio-text-secondary">No SEO metadata generated yet. Run SEO & Publish first.</p>
+        <FileSearch size={40} className="text-studio-text-secondary mb-4" />
+        <p className="text-sm text-studio-text-primary font-bold mb-1">No SEO metadata generated yet</p>
+        <p className="text-xs text-studio-text-secondary max-w-sm">
+          Click the "SEO & Publish" control below or use the prompt bar to optimize video titles, descriptions, and tags.
+        </p>
       </div>
     );
   }

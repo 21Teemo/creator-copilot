@@ -1,9 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useResearchStore } from "@/stores/useResearchStore";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { Eye, Clock, User, Compass, Play } from "lucide-react";
+import { Eye, Clock, User, Compass, Play, Sparkles, MessageSquare, Flame, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 
 interface TrendsViewProps {
   onPush?: (prompt: string, action: string) => void;
@@ -12,12 +12,23 @@ interface TrendsViewProps {
 export default function TrendsView({ onPush }: TrendsViewProps) {
   const trends = useResearchStore((state) => state.trends);
   const contentFormat = useProjectStore((state) => state.contentFormat);
+  const [expandedInsight, setExpandedInsight] = useState<Record<number, boolean>>({});
+
+  const toggleInsight = (index: number) => {
+    setExpandedInsight(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
 
   if (trends.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 text-center py-12">
-        <Compass size={40} className="text-studio-text-secondary animate-spin mb-4" />
-        <p className="text-sm text-studio-text-secondary">No trends data available. Run Explore Trends first.</p>
+        <Compass size={40} className="text-studio-text-secondary mb-4" />
+        <p className="text-sm text-studio-text-primary font-bold mb-1">No trends data available</p>
+        <p className="text-xs text-studio-text-secondary max-w-sm">
+          Enter a niche topic or paste a YouTube URL in the prompt bar below to start scanning for content trends.
+        </p>
       </div>
     );
   }
@@ -53,23 +64,51 @@ export default function TrendsView({ onPush }: TrendsViewProps) {
             >
               {/* Thumbnail Container */}
               <div
-                className={`relative bg-studio-bg overflow-hidden ${
+                className={`relative bg-studio-bg overflow-hidden group/thumb cursor-pointer ${
                   contentFormat === "short" ? "aspect-[9/16]" : "aspect-[16/9]"
                 }`}
+                onClick={() => {
+                  if (item.videoUrl) {
+                    window.open(item.videoUrl, "_blank", "noopener,noreferrer");
+                  }
+                }}
               >
-                {/* Simulated Thumbnail Gradient */}
+                {/* YouTube thumbnail image */}
+                {item.thumbnailUrl ? (
+                  <img
+                    src={item.thumbnailUrl}
+                    alt={item.title}
+                    referrerPolicy="no-referrer"
+                    className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover/thumb:opacity-100 transition-opacity duration-200"
+                    onError={(e) => {
+                      // Replace broken image with a styled fallback instead of hiding
+                      const el = e.target as HTMLImageElement;
+                      el.style.display = "none";
+                      const fallback = el.parentElement?.querySelector("[data-fallback]") as HTMLElement;
+                      if (fallback) fallback.style.display = "flex";
+                    }}
+                  />
+                ) : null}
+
+                {/* Fallback gradient (shown when no thumbnail or image fails) */}
                 <div
-                  className={`absolute inset-0 bg-gradient-to-tr opacity-25 ${
-                    contentFormat === "short"
-                      ? "from-purple-900 via-indigo-900 to-zinc-900"
-                      : "from-indigo-900 via-zinc-900 to-zinc-800"
+                  data-fallback
+                  className={`absolute inset-0 bg-gradient-to-br from-indigo-900/80 via-purple-900/60 to-zinc-900/90 items-center justify-center ${
+                    item.thumbnailUrl ? "hidden" : "flex"
                   }`}
+                >
+                  <Play size={24} className="text-white/30" />
+                </div>
+
+                {/* Gradient overlay on top of thumbnail */}
+                <div
+                  className={`absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none`}
                 />
                 
-                {/* Play Button Overlay */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 bg-black/40 transition-opacity duration-200">
-                  <div className="w-10 h-10 rounded-full bg-accent text-white flex items-center justify-center shadow-lg">
-                    <Play size={16} fill="currentColor" className="ml-0.5" />
+                {/* Play Button — always partially visible, full on hover */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-40 group-hover/thumb:opacity-100 bg-black/0 group-hover/thumb:bg-black/40 transition-all duration-200 pointer-events-none">
+                  <div className="w-11 h-11 rounded-full bg-accent text-white flex items-center justify-center shadow-lg group-hover/thumb:scale-110 transition-transform">
+                    <Play size={18} fill="currentColor" className="ml-0.5" />
                   </div>
                 </div>
 
@@ -87,9 +126,20 @@ export default function TrendsView({ onPush }: TrendsViewProps) {
 
               {/* Card Details */}
               <div className="p-3.5 flex flex-col flex-1">
-                <h4 className="text-xs font-bold text-studio-text-primary line-clamp-2 mb-1.5 leading-tight hover:text-accent">
-                  {item.title}
-                </h4>
+                {item.videoUrl ? (
+                  <a
+                    href={item.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-bold text-studio-text-primary line-clamp-2 mb-1.5 leading-tight hover:text-accent transition-colors cursor-pointer"
+                  >
+                    {item.title}
+                  </a>
+                ) : (
+                  <h4 className="text-xs font-bold text-studio-text-primary line-clamp-2 mb-1.5 leading-tight">
+                    {item.title}
+                  </h4>
+                )}
 
                 <div className="flex items-center gap-1.5 text-[10px] text-studio-text-secondary mb-2 truncate">
                   <User size={10} className="shrink-0" />
@@ -98,13 +148,67 @@ export default function TrendsView({ onPush }: TrendsViewProps) {
                   <span className="shrink-0">{item.publishedAt}</span>
                 </div>
 
-                <p className="text-[11px] text-studio-text-secondary line-clamp-3 leading-relaxed flex-1">
+                <p className="text-[11px] text-studio-text-secondary line-clamp-3 leading-relaxed flex-1 mb-2.5">
                   {item.description}
                 </p>
 
-                <div className="mt-3 pt-2.5 border-t border-studio-border/40 flex items-center justify-between text-[10px] font-medium text-studio-text-secondary">
+                {/* Advanced Metrics Grid */}
+                <div className="grid grid-cols-3 gap-1.5 mb-3 bg-studio-bg/60 p-2 rounded-xl border border-studio-border/30 text-[10px] shrink-0">
+                  <div className="flex flex-col items-center justify-center p-1 text-center">
+                    <span className="text-studio-text-secondary font-medium mb-0.5 flex items-center gap-0.5">
+                      <Flame size={10} className="text-amber-500 shrink-0" /> Virality
+                    </span>
+                    <span className="font-bold text-studio-text-primary text-[11px]">
+                      {item.viralityScore !== undefined && item.viralityScore !== null ? `${item.viralityScore}%` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center p-1 text-center border-x border-studio-border/30">
+                    <span className="text-studio-text-secondary font-medium mb-0.5 flex items-center gap-0.5">
+                      <MessageSquare size={10} className="text-accent shrink-0" /> Velocity
+                    </span>
+                    <span className="font-bold text-studio-text-primary text-[11px]">
+                      {item.commentVelocity !== undefined && item.commentVelocity !== null ? `${item.commentVelocity}/hr` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center p-1 text-center">
+                    <span className="text-studio-text-secondary font-medium mb-0.5 flex items-center gap-0.5">
+                      <TrendingUp size={10} className="text-emerald-500 shrink-0" /> Sub Gap
+                    </span>
+                    <span className="font-bold text-studio-text-primary text-[11px]">
+                      {item.subscriberGap !== undefined && item.subscriberGap !== null ? `x${item.subscriberGap}` : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* AI Trend Insights */}
+                {item.trendExplanation && (
+                  <div className="mb-3 shrink-0">
+                    <button
+                      onClick={() => toggleInsight(index)}
+                      className="w-full flex items-center justify-between py-1.5 px-2 rounded-lg bg-accent/5 hover:bg-accent/10 border border-accent/20 text-[10px] text-accent font-bold transition-all cursor-pointer"
+                    >
+                      <span className="flex items-center gap-1">
+                        <Sparkles size={11} className="animate-pulse text-amber-500 shrink-0" />
+                        Why It's Trending
+                      </span>
+                      {expandedInsight[index] ? <ChevronUp size={12} className="shrink-0" /> : <ChevronDown size={12} className="shrink-0" />}
+                    </button>
+                    {expandedInsight[index] && (
+                      <div className="mt-1.5 p-2.5 rounded-lg bg-studio-bg border border-studio-border/50 text-[10px] text-studio-text-secondary leading-relaxed space-y-1.5 shadow-inner">
+                        {item.trendExplanation.split('\n').filter(line => line.trim()).map((bullet, idx) => (
+                          <div key={idx} className="flex gap-1.5">
+                            <span className="text-accent select-none shrink-0">•</span>
+                            <span>{bullet.replace(/^[•\-\*\s]+/, '')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-auto pt-2.5 border-t border-studio-border/40 flex items-center justify-between text-[10px] font-medium text-studio-text-secondary shrink-0">
                   <span className="flex items-center gap-1">
-                    <Eye size={11} className="text-accent" />
+                    <Eye size={11} className="text-accent shrink-0" />
                     {item.views} views
                   </span>
                   {onPush && (

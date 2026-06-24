@@ -4,10 +4,20 @@ import { persist } from "zustand/middleware";
 export interface TrendItem {
   title: string;
   views: string;
+  rawViews?: number;
   duration: string;
   description: string;
   channelName: string;
   publishedAt: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  likes?: number;
+  comments?: number;
+  subscriberCount?: number;
+  commentVelocity?: number;
+  subscriberGap?: number;
+  viralityScore?: number;
+  trendExplanation?: string;
 }
 
 export interface FactSource {

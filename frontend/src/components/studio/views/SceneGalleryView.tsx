@@ -125,8 +125,11 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
   if (sceneImages.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 text-center py-12">
-        <ImageIcon size={40} className="text-studio-text-secondary animate-pulse mb-4" />
-        <p className="text-sm text-studio-text-secondary">No storyboard scenes generated yet. Run Scene Pictures first.</p>
+        <ImageIcon size={40} className="text-studio-text-secondary mb-4" />
+        <p className="text-sm text-studio-text-primary font-bold mb-1">No storyboard scenes generated yet</p>
+        <p className="text-xs text-studio-text-secondary max-w-sm">
+          Click the "Scene Pictures" control below or use the prompt bar to source stock assets and generate thumbnail frames.
+        </p>
       </div>
     );
   }

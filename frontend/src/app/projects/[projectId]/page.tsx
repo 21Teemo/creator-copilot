@@ -50,17 +50,21 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
   // 2. Handle click from floating Quick Control Action Chips
   const handleQuickActionClick = async (action: ActionChipType) => {
+    // Interactive research steps: switch view immediately and let user input query/search
+    if (action === "explore_trends") {
+      useStudioStore.getState().setActiveView("trends");
+      return;
+    }
+    if (action === "fact_finder") {
+      useStudioStore.getState().setActiveView("facts");
+      return;
+    }
+
     // Check if data already exists in the stores for this action.
     // If it does, we just switch the view, rather than triggering a re-generation.
     let hasData = false;
     
-    if (action === "explore_trends") {
-      hasData = useResearchStore.getState().trends.length > 0;
-      if (hasData) useStudioStore.getState().setActiveView("trends");
-    } else if (action === "fact_finder") {
-      hasData = useResearchStore.getState().summaries !== null;
-      if (hasData) useStudioStore.getState().setActiveView("facts");
-    } else if (action === "write_script") {
+    if (action === "write_script") {
       hasData = !!useScriptingStore.getState().script;
       if (hasData) useStudioStore.getState().setActiveView("script");
     } else if (action === "scene_pictures") {
