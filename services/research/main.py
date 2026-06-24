@@ -4,7 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 
-from research.services.youtube import fetch_youtube_trends, fetch_youtube_transcript
+from research.services.short import fetch_short_trends
+from research.services.long import fetch_long_trends
+from research.services.common import fetch_youtube_transcript
 from research.services.gemini import perform_web_search, perform_summarization
 
 app = FastAPI(title="Creator Copilot - Research Service", version="0.1.0")
@@ -63,9 +65,8 @@ async def get_short_trends(projectId: str, payload: ResearchRequest):
     if upload_hours == 720:
         upload_hours = None
 
-    trends = fetch_youtube_trends(
-        query,
-        is_short=True,
+    trends = fetch_short_trends(
+        query=query,
         min_views=payload.minViews or 10000,
         upload_within_hours=upload_hours,
         sort_by=payload.sortBy or "virality"
@@ -75,9 +76,8 @@ async def get_short_trends(projectId: str, payload: ResearchRequest):
 @router.post("/trends/long", response_model=List[TrendItem])
 async def get_long_trends(projectId: str, payload: ResearchRequest):
     query = payload.prompt
-    trends = fetch_youtube_trends(
-        query,
-        is_short=False,
+    trends = fetch_long_trends(
+        query=query,
         min_views=payload.minViews or 10000,
         upload_within_hours=payload.uploadWithinHours if payload.uploadWithinHours is not None else 720,
         sort_by=payload.sortBy or "virality"
