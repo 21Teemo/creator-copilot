@@ -57,11 +57,17 @@ router = APIRouter(prefix="/api/v1/projects/{projectId}/research")
 @router.post("/trends/short", response_model=List[TrendItem])
 async def get_short_trends(projectId: str, payload: ResearchRequest):
     query = payload.prompt
+    # For shorts, disable the age filter by default (when it is 720 or not specified)
+    # to allow popular Shorts to be resolved regardless of upload age
+    upload_hours = payload.uploadWithinHours
+    if upload_hours == 720:
+        upload_hours = None
+
     trends = fetch_youtube_trends(
         query,
         is_short=True,
         min_views=payload.minViews or 10000,
-        upload_within_hours=payload.uploadWithinHours if payload.uploadWithinHours is not None else 720,
+        upload_within_hours=upload_hours,
         sort_by=payload.sortBy or "virality"
     )
     return trends

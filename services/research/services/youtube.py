@@ -229,10 +229,12 @@ def fetch_youtube_trends(
             print(f"Error resolving YouTube URL title: {e}")
 
     # Build search query dynamically without hardcoded "2026"
+    # Fetch a larger pool for shorts to filter out long videos and low-view matches at the flat level
+    search_limit = 100 if is_short else 15
     if not actual_query or actual_query.strip() == "":
         search_query = "#shorts" if is_short else f"trending {current_year}"
     else:
-        search_query = f"ytsearch10:{actual_query} #shorts" if is_short else f"ytsearch10:{actual_query} {current_year}"
+        search_query = f"ytsearch{search_limit}:{actual_query} #shorts" if is_short else f"ytsearch{search_limit}:{actual_query} {current_year}"
 
     print(f"Executing YouTube search query: '{search_query}'")
 
@@ -248,15 +250,35 @@ def fetch_youtube_trends(
         with yt_dlp.YoutubeDL(ydl_opts_flat) as ydl:
             info = ydl.extract_info(search_query, download=False)
             if 'entries' in info:
-                candidate_entries = info['entries'][:10]  # Take top 10 candidates
+                candidate_entries = info['entries']
     except Exception as e:
         print(f"Error running flat search: {e}")
 
+    # Pre-filter candidates at the flat level (saves API requests and speeds up processing)
+    valid_candidates = []
+    for entry in candidate_entries:
+        video_id = entry.get("id")
+        if not video_id:
+            continue
+
+        # View count filter at the flat level
+        flat_views = int(entry.get("view_count") or 0)
+        if flat_views < min_views:
+            continue
+
+        # Duration filter for Shorts (<= 61 seconds)
+        if is_short:
+            duration = entry.get("duration")
+            if duration and duration > 61:
+                continue
+
+        valid_candidates.append(entry)
+
     trends = []
 
-    # Process candidates concurrently to keep response times bounded and avoid socket/proxy timeouts
+    # Process top 5 valid candidates concurrently to keep response times bounded and avoid socket/proxy timeouts
     import concurrent.futures
-    candidates = candidate_entries[:5]
+    candidates = valid_candidates[:5]
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(candidates), 5)) as executor:
         futures = [
