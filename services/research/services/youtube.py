@@ -106,12 +106,15 @@ Rules:
         return "Could not generate AI analysis for this trend."
 
 
-def _process_single_candidate(entry: dict, min_views: int, upload_within_hours: int) -> dict:
+def _process_single_candidate(entry: dict, min_views: int, upload_within_hours: int, is_short: bool = False) -> dict:
     video_id = entry.get("id")
     if not video_id:
         return None
 
-    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    if is_short:
+        video_url = f"https://www.youtube.com/shorts/{video_id}"
+    else:
+        video_url = f"https://www.youtube.com/watch?v={video_id}"
 
     try:
         # Full metadata extraction for this specific video
@@ -257,7 +260,7 @@ def fetch_youtube_trends(
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(candidates), 5)) as executor:
         futures = [
-            executor.submit(_process_single_candidate, entry, min_views, upload_within_hours)
+            executor.submit(_process_single_candidate, entry, min_views, upload_within_hours, is_short)
             for entry in candidates
         ]
         for future in concurrent.futures.as_completed(futures):
