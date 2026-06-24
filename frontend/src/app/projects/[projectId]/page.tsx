@@ -155,7 +155,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       <QuickControls onActionClick={handleQuickActionClick} />
 
       {/* 4. Conversational Chat Prompt Input */}
-      <PromptInputBar onSubmit={handlePromptSubmit} disabled={loading} />
+      <PromptInputBar projectId={projectId} onSubmit={handlePromptSubmit} disabled={loading} />
     </StudioShell>
   );
 }

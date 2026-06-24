@@ -47,6 +47,12 @@ def _process_single_short_candidate(entry: dict, min_views: int, upload_within_h
             if upload_within_hours and hours > upload_within_hours:
                 return None
 
+            # Verify aspect ratio is vertical for Shorts (width < height) if dimensions are available
+            width = full_info.get("width")
+            height = full_info.get("height")
+            if width and height and width >= height:
+                return None
+
             # Calculate scores
             comment_velocity = comments / hours
             subscriber_gap = views / max(1, followers)

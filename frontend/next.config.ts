@@ -24,6 +24,14 @@ const nextConfig: NextConfig = {
         destination: "http://127.0.0.1:8003/api/v1/projects/:projectId/video/:path*",
       },
       {
+        source: "/api/v1/projects/:projectId/upload",
+        destination: "http://127.0.0.1:8003/api/v1/projects/:projectId/upload",
+      },
+      {
+        source: "/api/v1/projects/:projectId/media/static/:path*",
+        destination: "http://127.0.0.1:8003/static/:path*",
+      },
+      {
         source: "/api/v1/projects/:projectId/seo/:path*",
         destination: "http://127.0.0.1:8004/api/v1/projects/:projectId/seo/:path*",
       },

@@ -134,7 +134,7 @@ def fetch_long_trends(
             print(f"Error resolving YouTube URL title: {e}")
 
     # Build search query for long-form
-    search_limit = 15
+    search_limit = 25
     if not actual_query or actual_query.strip() == "":
         search_query = f"trending {current_year}"
     else:

@@ -41,6 +41,7 @@ export function classifyIntent(prompt: string, activeView: StudioView): StudioAc
   if (p.includes("category: images")) return "scene_pictures";
   if (p.includes("category: videos")) return "scene_videos";
   if (p.includes("category: voices") || p.includes("category: characters") || p.includes("category: avatar")) return "write_script";
+  if (p.includes("category: audio")) return "ffmpeg_render";
   if (p.includes("category: uploads")) return "seo_publish";
 
   // If user is currently on the trends or facts view, keep general queries focused on search.
