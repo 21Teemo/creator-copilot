@@ -101,7 +101,7 @@ def _process_single_short_candidate(entry: dict, min_views: int, upload_within_h
 
 def fetch_short_trends(
         query: str,
-        min_views: int = 10000,
+        min_views: int = 1000,
         upload_within_hours: Optional[int] = None,
         sort_by: str = "virality"
 ) -> List[dict]:
@@ -162,7 +162,7 @@ def fetch_short_trends(
     valid_candidates = []
     for entry in candidate_entries:
         video_id = entry.get("id")
-        if not video_id:
+        if not video_id or len(video_id) != 11:
             continue
 
         flat_views = int(entry.get("view_count") or 0)
@@ -175,6 +175,9 @@ def fetch_short_trends(
             continue
 
         valid_candidates.append(entry)
+
+    # Sort by views descending before slicing to ensure we process the most popular candidates
+    valid_candidates.sort(key=lambda x: int(x.get("view_count") or 0), reverse=True)
 
     trends = []
     candidates = valid_candidates[:5]

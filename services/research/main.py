@@ -25,7 +25,7 @@ class BasePayload(BaseModel):
 
 class ResearchRequest(BasePayload):
     prompt: str
-    minViews: Optional[int] = 10000
+    minViews: Optional[int] = None
     uploadWithinHours: Optional[int] = 720
     sortBy: Optional[str] = "virality"
 
@@ -67,7 +67,7 @@ async def get_short_trends(projectId: str, payload: ResearchRequest):
 
     trends = fetch_short_trends(
         query=query,
-        min_views=payload.minViews or 10000,
+        min_views=payload.minViews if payload.minViews is not None else 1000,
         upload_within_hours=upload_hours,
         sort_by=payload.sortBy or "virality"
     )
@@ -78,7 +78,7 @@ async def get_long_trends(projectId: str, payload: ResearchRequest):
     query = payload.prompt
     trends = fetch_long_trends(
         query=query,
-        min_views=payload.minViews or 10000,
+        min_views=payload.minViews if payload.minViews is not None else 5000,
         upload_within_hours=payload.uploadWithinHours if payload.uploadWithinHours is not None else 720,
         sort_by=payload.sortBy or "virality"
     )
