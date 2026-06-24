@@ -175,18 +175,19 @@ def fetch_long_trends(
     candidates = valid_candidates[:5]
 
     # Process top candidates concurrently
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(candidates), 5)) as executor:
-        futures = [
-            executor.submit(_process_single_long_candidate, entry, min_views, upload_within_hours)
-            for entry in candidates
-        ]
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                res = future.result()
-                if res:
-                    trends.append(res)
-            except Exception as fut_err:
-                print(f"Error processing long candidate in thread: {fut_err}")
+    if candidates:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(candidates), 5)) as executor:
+            futures = [
+                executor.submit(_process_single_long_candidate, entry, min_views, upload_within_hours)
+                for entry in candidates
+            ]
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    res = future.result()
+                    if res:
+                        trends.append(res)
+                except Exception as fut_err:
+                    print(f"Error processing long candidate in thread: {fut_err}")
 
     # Sort results
     if sort_by == "virality":
