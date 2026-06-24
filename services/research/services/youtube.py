@@ -106,6 +106,89 @@ Rules:
         return "Could not generate AI analysis for this trend."
 
 
+def _process_single_candidate(entry: dict, min_views: int, upload_within_hours: int) -> dict:
+    video_id = entry.get("id")
+    if not video_id:
+        return None
+
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+
+    try:
+        # Full metadata extraction for this specific video
+        ydl_opts_full = {
+            'quiet': True,
+            'skip_download': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts_full) as ydl:
+            full_info = ydl.extract_info(video_url, download=False)
+
+            # Extract metrics
+            views = int(full_info.get("view_count") or 0)
+            likes = int(full_info.get("like_count") or 0)
+            comments = int(full_info.get("comment_count") or 0)
+            followers = int(full_info.get("channel_follower_count") or 0)
+            upload_date = full_info.get("upload_date") or ""
+
+            # Check filters
+            if views < min_views:
+                return None
+
+            hours = calculate_hours_since_upload(upload_date)
+            if upload_within_hours and hours > upload_within_hours:
+                return None
+
+            # Calculate scores
+            comment_velocity = comments / hours
+            subscriber_gap = views / max(1, followers)
+            virality_score = calculate_virality_score(views, likes, comments, followers, hours)
+
+            # Try to get transcript & summary for the top videos
+            transcript_text = ""
+            ai_explanation = ""
+            try:
+                try:
+                    transcript_text = fetch_youtube_transcript(video_url)
+                except Exception as tx_ex:
+                    print(f"Failed to fetch transcript for {video_id}: {tx_ex}")
+
+                cleaned_transcript = ""
+                if transcript_text and "Could not retrieve transcript" not in transcript_text:
+                    cleaned_transcript = transcript_text
+
+                ai_explanation = generate_trend_explanation(
+                    full_info.get("title") or "Unknown Video",
+                    full_info.get("description") or "",
+                    full_info.get("uploader") or "Unknown Channel",
+                    cleaned_transcript
+                )
+            except Exception as ex:
+                print(f"Failed to fetch AI explanation for {video_id}: {ex}")
+
+            thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+
+            return {
+                "title": full_info.get("title") or "Unknown Video",
+                "views": format_views(views),
+                "rawViews": views,
+                "duration": format_duration(full_info.get("duration")),
+                "description": full_info.get("description") or "No description available.",
+                "channelName": full_info.get("uploader") or full_info.get("channel") or "Unknown Channel",
+                "publishedAt": format_published_at(upload_date),
+                "videoUrl": video_url,
+                "thumbnailUrl": thumbnail_url,
+                "likes": likes,
+                "comments": comments,
+                "subscriberCount": followers,
+                "commentVelocity": round(comment_velocity, 1),
+                "subscriberGap": round(subscriber_gap, 2),
+                "viralityScore": round(virality_score, 1),
+                "trendExplanation": ai_explanation
+            }
+    except Exception as e:
+        print(f"Error fetching full details for video {video_id}: {e}")
+        return None
+
+
 def fetch_youtube_trends(
         query: str,
         is_short: bool = False,
@@ -168,88 +251,23 @@ def fetch_youtube_trends(
 
     trends = []
 
-    # For each candidate, fetch complete details sequentially (up to 5 to keep response times bounded)
-    for entry in candidate_entries[:5]:
-        video_id = entry.get("id")
-        if not video_id:
-            continue
+    # Process candidates concurrently to keep response times bounded and avoid socket/proxy timeouts
+    import concurrent.futures
+    candidates = candidate_entries[:5]
 
-        video_url = f"https://www.youtube.com/watch?v={video_id}"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(candidates), 5)) as executor:
+        futures = [
+            executor.submit(_process_single_candidate, entry, min_views, upload_within_hours)
+            for entry in candidates
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                res = future.result()
+                if res:
+                    trends.append(res)
+            except Exception as fut_err:
+                print(f"Error processing candidate in thread: {fut_err}")
 
-        try:
-            # Full metadata extraction for this specific video
-            ydl_opts_full = {
-                'quiet': True,
-                'skip_download': True,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts_full) as ydl:
-                full_info = ydl.extract_info(video_url, download=False)
-
-                # Extract metrics
-                views = int(full_info.get("view_count") or 0)
-                likes = int(full_info.get("like_count") or 0)
-                comments = int(full_info.get("comment_count") or 0)
-                followers = int(full_info.get("channel_follower_count") or 0)
-                upload_date = full_info.get("upload_date") or ""
-
-                # Check filters
-                if views < min_views:
-                    continue
-
-                hours = calculate_hours_since_upload(upload_date)
-                if upload_within_hours and hours > upload_within_hours:
-                    continue
-
-                # Calculate scores
-                comment_velocity = comments / hours
-                subscriber_gap = views / max(1, followers)
-                like_ratio = likes / max(1, views)
-                virality_score = calculate_virality_score(views, likes, comments, followers, hours)
-
-                # Try to get transcript & summary for the top videos
-                transcript_text = ""
-                ai_explanation = ""
-                try:
-                    try:
-                        transcript_text = fetch_youtube_transcript(video_url)
-                    except Exception as tx_ex:
-                        print(f"Failed to fetch transcript: {tx_ex}")
-
-                    cleaned_transcript = ""
-                    if transcript_text and "Could not retrieve transcript" not in transcript_text:
-                        cleaned_transcript = transcript_text
-
-                    ai_explanation = generate_trend_explanation(
-                        full_info.get("title") or "Unknown Video",
-                        full_info.get("description") or "",
-                        full_info.get("uploader") or "Unknown Channel",
-                        cleaned_transcript
-                    )
-                except Exception as ex:
-                    print(f"Failed to fetch AI explanation for {video_id}: {ex}")
-
-                thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
-
-                trends.append({
-                    "title": full_info.get("title") or "Unknown Video",
-                    "views": format_views(views),
-                    "rawViews": views,
-                    "duration": format_duration(full_info.get("duration")),
-                    "description": full_info.get("description") or "No description available.",
-                    "channelName": full_info.get("uploader") or full_info.get("channel") or "Unknown Channel",
-                    "publishedAt": format_published_at(upload_date),
-                    "videoUrl": video_url,
-                    "thumbnailUrl": thumbnail_url,
-                    "likes": likes,
-                    "comments": comments,
-                    "subscriberCount": followers,
-                    "commentVelocity": round(comment_velocity, 1),
-                    "subscriberGap": round(subscriber_gap, 2),
-                    "viralityScore": round(virality_score, 1),
-                    "trendExplanation": ai_explanation
-                })
-        except Exception as e:
-            print(f"Error fetching full details for video {video_id}: {e}")
 
     # Sort results
     if sort_by == "virality":
