@@ -77,6 +77,7 @@ def _process_single_long_candidate(entry: dict, min_views: int) -> Optional[dict
                 "views": format_views(views),
                 "rawViews": views,
                 "duration": format_duration(full_info.get("duration")),
+                "durationSeconds": int(full_info.get("duration") or 0),
                 "description": full_info.get("description") or "No description available.",
                 "channelName": full_info.get("uploader") or full_info.get("channel") or "Unknown Channel",
                 "publishedAt": format_published_at(upload_date),

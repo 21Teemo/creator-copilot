@@ -70,7 +70,11 @@ export async function apiRequest(projectId: string, path: string, method = "POST
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`API Error [${response.status}]: ${errText || response.statusText}`);
+    const hint =
+      response.status === 500 && !errText
+        ? "Backend service unavailable — run ./dev.sh or start research on port 8001."
+        : errText || response.statusText;
+    throw new Error(`API Error [${response.status}]: ${hint}`);
   }
 
   return response.json();

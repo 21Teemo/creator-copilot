@@ -2,10 +2,18 @@
 
 import React from "react";
 import { useProjectStore, ContentFormat } from "@/stores/useProjectStore";
+import { useResearchStore } from "@/stores/useResearchStore";
 import { Film, Smartphone } from "lucide-react";
 
 export default function ContentFormatToggle() {
   const { contentFormat, setContentFormat } = useProjectStore();
+  const clearResearch = useResearchStore((state) => state.clearResearch);
+
+  const switchFormat = (format: ContentFormat) => {
+    if (format === contentFormat) return;
+    clearResearch();
+    setContentFormat(format);
+  };
 
   return (
     <div className="flex items-center gap-2">
@@ -22,7 +30,7 @@ export default function ContentFormatToggle() {
 
         {/* Long Button */}
         <button
-          onClick={() => setContentFormat("long")}
+          onClick={() => switchFormat("long")}
           className={`relative z-10 flex items-center justify-center gap-1.5 w-[84px] h-7 text-xs font-semibold rounded-full transition-colors duration-200 cursor-pointer ${
             contentFormat === "long"
               ? "text-studio-text-primary"
@@ -35,7 +43,7 @@ export default function ContentFormatToggle() {
 
         {/* Short Button */}
         <button
-          onClick={() => setContentFormat("short")}
+          onClick={() => switchFormat("short")}
           className={`relative z-10 flex items-center justify-center gap-1.5 w-[84px] h-7 text-xs font-semibold rounded-full transition-colors duration-200 cursor-pointer ${
             contentFormat === "short"
               ? "text-studio-text-primary"

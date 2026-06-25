@@ -1,11 +1,20 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+export interface EngagementSegment {
+  start: number;
+  end: number;
+  startLabel: string;
+  endLabel: string;
+  score: number;
+}
+
 export interface TrendItem {
   title: string;
   views: string;
   rawViews?: number;
   duration: string;
+  durationSeconds?: number;
   description: string;
   channelName: string;
   publishedAt: string;
@@ -18,6 +27,9 @@ export interface TrendItem {
   subscriberGap?: number;
   viralityScore?: number;
   trendExplanation?: string;
+  engagementSegments?: EngagementSegment[];
+  heatmapAvailable?: boolean;
+  engagementSource?: string;
 }
 
 export interface FactSource {
@@ -37,6 +49,13 @@ interface ResearchState {
   setTrends: (trends: TrendItem[]) => void;
   setSummaries: (summaries: ResearchSummary | null) => void;
   updateSummaryText: (text: string) => void;
+  updateTrendExplanation: (videoUrl: string, explanation: string) => void;
+  updateTrendEngagement: (
+    videoUrl: string,
+    segments: EngagementSegment[],
+    heatmapAvailable: boolean,
+    engagementSource: string
+  ) => void;
   clearResearch: () => void;
 }
 
@@ -52,6 +71,25 @@ export const useResearchStore = create<ResearchState>()(
           summaries: state.summaries
             ? { ...state.summaries, summaryText: text }
             : null,
+        })),
+      updateTrendExplanation: (videoUrl, explanation) =>
+        set((state) => ({
+          trends: state.trends.map((trend) =>
+            trend.videoUrl === videoUrl ? { ...trend, trendExplanation: explanation } : trend
+          ),
+        })),
+      updateTrendEngagement: (videoUrl, segments, heatmapAvailable, engagementSource) =>
+        set((state) => ({
+          trends: state.trends.map((trend) =>
+            trend.videoUrl === videoUrl
+              ? {
+                  ...trend,
+                  engagementSegments: segments,
+                  heatmapAvailable,
+                  engagementSource,
+                }
+              : trend
+          ),
         })),
       clearResearch: () => set({ trends: [], summaries: null }),
     }),

@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useProjectStore } from "@/stores/useProjectStore";
+import { useStudioStore } from "@/stores/useStudioStore";
 import { useScriptingStore } from "@/stores/useScriptingStore";
 import { useSeoStore } from "@/stores/useSeoStore";
 import { useMediaStore } from "@/stores/useMediaStore";
@@ -36,6 +37,36 @@ type BinaryAttachment = {
 
 type AttachedFile = TextAttachment | BinaryAttachment;
 
+const SHORT_PLACEHOLDER_EXAMPLES = [
+  "e.g. Funny cat fails that went viral",
+  "e.g. Satisfying cooking ASMR recipes",
+  "e.g. Fast-paced parkour stunts",
+];
+
+const LONG_PLACEHOLDER_EXAMPLES = [
+  "e.g. Deep documentary about ancient Rome",
+  "e.g. Indie game development devlogs",
+  "e.g. Long-form true crime analysis",
+];
+
+const SHORT_TREND_CHIPS = [
+  { label: "Breakout Hits", query: "underrated viral" },
+  { label: "Viral Hooks", query: "viral hook storytime" },
+  { label: "Trending Audio", query: "trending short form audio" },
+  { label: "POV Storytime", query: "POV storytime drama" },
+  { label: "Satisfying ASMR", query: "satisfying ASMR cooking" },
+  { label: "Gym Motivation", query: "gym motivation transformation" },
+];
+
+const LONG_TREND_CHIPS = [
+  { label: "Breakout Hits", query: "underrated viral documentary" },
+  { label: "Documentary", query: "deep documentary explainer" },
+  { label: "True Crime", query: "true crime case analysis" },
+  { label: "Devlog", query: "indie game devlog" },
+  { label: "Tutorial", query: "step by step tutorial" },
+  { label: "Podcast", query: "long form podcast interview" },
+];
+
 function applyTextAttachment(name: string, textContent: string) {
   if (name.endsWith(".json")) {
     const parsed = JSON.parse(textContent);
@@ -62,12 +93,41 @@ export default function PromptInputBar({ projectId, onSubmit, disabled }: Prompt
   const [prompt, setPrompt] = useState("");
   const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
 
   const contentFormat = useProjectStore((state) => state.contentFormat);
+  const activeView = useStudioStore((state) => state.activeView);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const placeholderText =
-    contentFormat === "short"
+  const placeholderExamples = useMemo(
+    () => (contentFormat === "short" ? SHORT_PLACEHOLDER_EXAMPLES : LONG_PLACEHOLDER_EXAMPLES),
+    [contentFormat]
+  );
+
+  const trendChips = useMemo(
+    () => (contentFormat === "short" ? SHORT_TREND_CHIPS : LONG_TREND_CHIPS),
+    [contentFormat]
+  );
+
+  const showTrendHints = activeView === "welcome" || activeView === "trends";
+
+  useEffect(() => {
+    setPlaceholderIndex(0);
+  }, [contentFormat]);
+
+  useEffect(() => {
+    if (!showTrendHints || prompt.trim()) return;
+
+    const intervalId = window.setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % placeholderExamples.length);
+    }, 4000);
+
+    return () => window.clearInterval(intervalId);
+  }, [showTrendHints, prompt, placeholderExamples.length]);
+
+  const placeholderText = showTrendHints
+    ? placeholderExamples[placeholderIndex]
+    : contentFormat === "short"
       ? "Ask to design a viral hook, write a script, generate Short scenes..."
       : "Ask to search niche trends, write an outline, compile horizontal videos...";
 
@@ -204,6 +264,22 @@ export default function PromptInputBar({ projectId, onSubmit, disabled }: Prompt
           <ArrowUp size={16} />
         </button>
       </form>
+
+      {showTrendHints && (
+        <div className="flex flex-wrap gap-2 mt-2 px-1">
+          {trendChips.map((chip) => (
+            <button
+              key={chip.label}
+              type="button"
+              onClick={() => setPrompt(chip.query)}
+              disabled={disabled || isUploading}
+              className="text-xs px-3 py-1 rounded-full bg-studio-border/30 text-studio-text-secondary hover:bg-accent/20 hover:text-studio-text-primary border border-studio-border/40 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

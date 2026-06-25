@@ -61,6 +61,7 @@ echo "Launching microservices..."
 # Launch each microservice
 cd "$SERVICES_DIR"
 
+export TIKTOK_HEADLESS="${TIKTOK_HEADLESS:-false}"
 python -m uvicorn research.main:app --host 127.0.0.1 --port 8001 > /tmp/cc-research.log 2>&1 &
 pids+=($!)
 echo "-> Research Service started on port 8001 (log: /tmp/cc-research.log)"

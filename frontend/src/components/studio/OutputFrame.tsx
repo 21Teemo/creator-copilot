@@ -16,11 +16,12 @@ import VideoView from "./views/VideoView";
 import SeoView from "./views/SeoView";
 
 interface OutputFrameProps {
+  projectId: string;
   onSelectPrompt: (prompt: string, action: string) => void;
   onPublish: () => void;
 }
 
-export default function OutputFrame({ onSelectPrompt, onPublish }: OutputFrameProps) {
+export default function OutputFrame({ projectId, onSelectPrompt, onPublish }: OutputFrameProps) {
   const activeView = useStudioStore((state) => state.activeView);
   const loading = useStudioStore((state) => state.loading);
   const { contentFormat, lastGeneratedFormat } = useProjectStore();
@@ -98,7 +99,7 @@ export default function OutputFrame({ onSelectPrompt, onPublish }: OutputFramePr
         {loading ? (
           <SkeletonLoader view={activeView} contentFormat={contentFormat} />
         ) : (
-          renderView(activeView, onSelectPrompt, onPublish)
+          renderView(activeView, projectId, onSelectPrompt, onPublish)
         )}
       </div>
     </main>
@@ -108,6 +109,7 @@ export default function OutputFrame({ onSelectPrompt, onPublish }: OutputFramePr
 // Switches sub-components based on view
 function renderView(
   view: StudioView,
+  projectId: string,
   onSelectPrompt: (prompt: string, action: string) => void,
   onPublish: () => void
 ) {
@@ -115,7 +117,7 @@ function renderView(
     case "welcome":
       return <WelcomeView onSelectPrompt={onSelectPrompt} />;
     case "trends":
-      return <TrendsView onPush={onSelectPrompt} />;
+      return <TrendsView projectId={projectId} onPush={onSelectPrompt} />;
     case "facts":
       return <FactsView onPush={onSelectPrompt} />;
     case "script":

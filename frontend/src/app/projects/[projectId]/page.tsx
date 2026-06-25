@@ -141,6 +141,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       {/* 2. Main Hero Output Canvas */}
       <div className="flex-1 flex flex-col min-h-0">
         <OutputFrame
+          projectId={projectId}
           onSelectPrompt={handleSuggestedPromptSelect}
           onPublish={handlePublishToYouTube}
         />
