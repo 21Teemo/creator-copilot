@@ -13,7 +13,6 @@ from research.services.common import (
     calculate_hours_since_upload,
     calculate_virality_score,
     rewrite_to_tiktok_search,
-    fetch_trend_explanation_lazy,
     FRESHNESS_MAX_HOURS,
     TIKTOK_TRENDS_CACHE_SUCCESS_SECONDS,
     TIKTOK_TRENDS_CACHE_FAILURE_SECONDS,
@@ -23,7 +22,8 @@ from research.services.common import (
 )
 
 TIKTOK_MAX_DURATION_SECONDS = 180
-TIKTOK_FLAT_POOL_SIZE = 40
+# TikTok hashtag feed: 0 = top/viral (default), 1 = newest first
+TIKTOK_HASHTAG_SORT_NEWEST = 1
 
 
 def _is_tiktok_scrape_failure(trends: List[dict]) -> bool:
@@ -305,22 +305,71 @@ def _process_single_tiktok_candidate(entry: dict, min_views: int) -> Optional[di
     return _process_tiktokapi_entry(entry, min_views)
 
 
+async def _iter_hashtag_videos(
+    tag,
+    api: TikTokApi,
+    *,
+    count: int,
+    sort_type: int = TIKTOK_HASHTAG_SORT_NEWEST,
+    **kwargs,
+):
+    """Paginate challenge/item_list with explicit sort (TikTokApi.videos ignores sort_type)."""
+    if getattr(tag, "id", None) is None:
+        await tag.info(**kwargs)
+
+    found = 0
+    cursor = 0
+    while found < count:
+        params = {
+            "challengeID": tag.id,
+            "count": min(30, count - found),
+            "cursor": cursor,
+            "sortType": sort_type,
+        }
+        resp = await api.make_request(
+            url="https://www.tiktok.com/api/challenge/item_list/",
+            params=params,
+            headers=kwargs.get("headers"),
+            session_index=kwargs.get("session_index"),
+        )
+        if resp is None:
+            raise RuntimeError("TikTok returned an invalid response.")
+
+        for video_data in resp.get("itemList", []):
+            yield api.video(data=video_data)
+            found += 1
+            if found >= count:
+                return
+
+        if not resp.get("hasMore", False):
+            return
+        cursor = resp.get("cursor")
+
+
 async def _fetch_hashtag_videos_async(hashtag_names: List[str], limit: int) -> list:
     entries: list = []
+    session_kwargs = _tiktokapi_session_kwargs()
     async with TikTokApi() as api:
-        await api.create_sessions(**_tiktokapi_session_kwargs())
+        await api.create_sessions(**session_kwargs)
         for name in hashtag_names:
             if len(entries) >= limit:
                 break
             try:
                 tag = api.hashtag(name=name)
                 remaining = limit - len(entries)
-                async for video in tag.videos(count=remaining):
+                async for video in _iter_hashtag_videos(
+                    tag,
+                    api,
+                    count=remaining,
+                    sort_type=TIKTOK_HASHTAG_SORT_NEWEST,
+                ):
                     entries.append(_video_to_flat_entry(video))
                     if len(entries) >= limit:
                         break
                 if entries:
-                    print(f"[TIKTOKAPI] Resolved {len(entries)} videos for hashtag #{name}")
+                    print(
+                        f"[TIKTOKAPI] Resolved {len(entries)} newest videos for hashtag #{name}"
+                    )
                     return entries
             except Exception as e:
                 print(f"[TIKTOKAPI] Hashtag #{name} failed: {e}")
@@ -394,7 +443,7 @@ def fetch_short_trends(
         reverse=True,
     )
 
-    candidates = valid_candidates[:TIKTOK_FLAT_POOL_SIZE]
+    candidates = valid_candidates
 
     trends = []
     if candidates:
@@ -421,20 +470,6 @@ def fetch_short_trends(
         trends.sort(key=lambda x: x.get("rawViews", 0), reverse=True)
     else:
         trends.sort(key=lambda x: x.get("subscriberGap", 0.0), reverse=True)
-
-    trends = trends[:5]
-
-    for video in trends:
-        try:
-            video["trendExplanation"] = fetch_trend_explanation_lazy(
-                video.get("title", "Unknown"),
-                video.get("description", ""),
-                video.get("channelName", "Unknown Creator"),
-                video.get("videoUrl", ""),
-            )
-        except Exception as e:
-            print(f"Lazy AI enrichment failed for {video.get('videoUrl')}: {e}")
-            video["trendExplanation"] = "AI analysis temporarily unavailable."
 
     if not trends:
         print("No TikTok trends resolved. Returning fallback placeholder alert card.")

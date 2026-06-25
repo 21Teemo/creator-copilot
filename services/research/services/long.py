@@ -133,7 +133,7 @@ def fetch_long_trends(
         actual_query = rewrite_to_youtube_search(actual_query, is_short=False)
 
     # Build search query for long-form
-    search_limit = 25
+    search_limit = 50
     if not actual_query or actual_query.strip() == "":
         search_query = f"trending {current_year}"
     else:
@@ -171,8 +171,7 @@ def fetch_long_trends(
 
         valid_candidates.append(entry)
 
-    # Preserve YouTube search relevance order; process a wider pool for SubGap ranking
-    candidates = valid_candidates[:25]
+    candidates = valid_candidates
 
     trends = []
     if candidates:
@@ -200,8 +199,6 @@ def fetch_long_trends(
         trends.sort(key=lambda x: x.get("rawViews", 0), reverse=True)
     else:
         trends.sort(key=lambda x: x.get("subscriberGap", 0.0), reverse=True)
-
-    trends = trends[:5]
 
     # Fallback alert item if empty
     if not trends:

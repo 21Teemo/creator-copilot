@@ -125,7 +125,7 @@ export default function TrendsView({ projectId, onPush }: TrendsViewProps) {
             Niche Trend Scan Results
           </h3>
           <p className="text-xs text-studio-text-secondary">
-            Displaying the top {trends.length} matching content signals
+            Displaying {trends.length} matching content signals
           </p>
         </div>
         <div className="px-2.5 py-1 rounded-full bg-accent/15 border border-accent/30 text-[10px] font-bold text-accent uppercase tracking-wider">
