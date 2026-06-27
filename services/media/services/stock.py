@@ -1,7 +1,21 @@
 import httpx
 from media.config import PEXELS_API_KEY
 
-def search_pexels_photos(query: str) -> list:
+def enrich_stock_query(prompt: str, visual_references: list | None = None) -> str:
+    if not visual_references:
+        return prompt
+    labels = []
+    for ref in visual_references:
+        label = (ref.get("label") or "").strip()
+        if label:
+            labels.append(label)
+    if not labels:
+        return prompt
+    return f"{prompt}, {', '.join(labels)}"[:200]
+
+
+def search_pexels_photos(query: str, visual_references: list | None = None) -> list:
+    query = enrich_stock_query(query, visual_references)
     if not PEXELS_API_KEY:
         # Fallback to static list if API key is not present
         return [

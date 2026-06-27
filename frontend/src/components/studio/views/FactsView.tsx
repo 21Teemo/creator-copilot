@@ -93,7 +93,15 @@ function parseBriefText(text: string): BriefBlock[] {
 }
 
 function FormattedBrief({ text }: { text: string }) {
-  const blocks = parseBriefText(text);
+  const trimmed = text.trim();
+  const blocks = parseBriefText(trimmed);
+  if (blocks.length === 0 && trimmed) {
+    return (
+      <div className="text-sm text-studio-text-primary leading-relaxed whitespace-pre-wrap break-words">
+        {trimmed}
+      </div>
+    );
+  }
   if (blocks.length === 0) {
     return <p className="text-sm text-studio-text-secondary italic">No brief content yet.</p>;
   }
@@ -173,7 +181,7 @@ function CopyToast({ message }: { message: string | null }) {
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1A1A1F]/95 backdrop-blur-md border border-accent/30 shadow-2xl text-xs font-medium text-studio-text-primary animate-fade-in"
+      className="fixed bottom-20 sm:bottom-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1A1A1F]/95 backdrop-blur-md border border-accent/30 shadow-2xl text-xs font-medium text-studio-text-primary animate-fade-in max-w-[calc(100vw-2rem)]"
     >
       <Check size={14} className="text-green-400 shrink-0" />
       {message}
@@ -266,10 +274,10 @@ export default function FactsView({ onPush }: FactsViewProps) {
   const briefEmpty = summaries.summaryText.trim().length === 0;
 
   return (
-    <div className="flex flex-col flex-1 h-full">
-      <div className="flex items-center justify-between mb-4 shrink-0">
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className="flex flex-col gap-1 sm:gap-2 mb-3 sm:mb-4 shrink-0">
         <div>
-          <h3 className="text-base font-bold text-studio-text-primary">
+          <h3 className="text-sm sm:text-base font-bold text-studio-text-primary">
             Research Brief & Fact Summary
           </h3>
           <p className="text-xs text-studio-text-secondary">
@@ -278,18 +286,18 @@ export default function FactsView({ onPush }: FactsViewProps) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 h-full">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain pr-1 -mr-1">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5 pb-2">
           {/* Main Brief Panel */}
-          <div className="lg:col-span-2 flex flex-col bg-studio-surface border border-studio-border/60 rounded-2xl overflow-hidden h-full">
-            <div className="px-4 py-3 bg-studio-border/20 border-b border-studio-border/40 flex items-center justify-between gap-2">
+          <div className="lg:col-span-2 flex flex-col bg-studio-surface border border-studio-border/60 rounded-2xl overflow-hidden">
+            <div className="px-3 sm:px-4 py-3 bg-studio-border/20 border-b border-studio-border/40 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 min-w-0">
                 <FileText size={14} className="text-accent shrink-0" />
                 <span className="text-xs font-bold text-studio-text-primary uppercase tracking-wider truncate">
                   Synthesized Brief (Editable)
                 </span>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex flex-wrap items-center gap-1 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsEditing((v) => !v)}
@@ -327,23 +335,23 @@ export default function FactsView({ onPush }: FactsViewProps) {
                 </button>
               </div>
             </div>
-            <div className="p-5 flex-1 flex flex-col min-h-0 select-text overflow-hidden">
-              <div className="flex-1 overflow-y-auto min-h-0 rounded-xl bg-studio-bg/30 border border-studio-border/50 focus-within:border-accent/40 transition-colors">
+            <div className="p-4 sm:p-5 flex flex-col gap-3 select-text">
+              <div className="min-h-[min(50vh,280px)] max-h-[min(72vh,720px)] overflow-y-auto overscroll-y-contain rounded-xl bg-studio-bg/50 border border-studio-border/50 focus-within:border-accent/40 transition-colors">
                 {isEditing ? (
                   <textarea
                     value={summaries.summaryText}
                     onChange={(e) => updateSummaryText(e.target.value)}
                     aria-label="Edit research brief"
-                    className="w-full h-full min-h-[280px] bg-transparent text-studio-text-primary text-[13px] leading-[1.75] focus:outline-none resize-none placeholder-studio-text-secondary/70 font-sans p-5 select-text"
+                    className="w-full min-h-[min(50vh,280px)] bg-transparent text-studio-text-primary text-sm sm:text-[13px] leading-[1.75] focus:outline-none resize-none placeholder-studio-text-secondary/70 font-sans p-4 sm:p-5 select-text"
                     placeholder="Review or edit the research brief summary..."
                   />
                 ) : (
-                  <div className="p-5">
+                  <div className="p-4 sm:p-5">
                     <FormattedBrief text={summaries.summaryText} />
                   </div>
                 )}
               </div>
-              <div className="flex justify-between items-center text-[10px] text-studio-text-secondary px-1 mt-2">
+              <div className="flex justify-between items-center text-[10px] text-studio-text-secondary px-1">
                 <span>{wordCount} words</span>
                 <span>{charCount} characters</span>
               </div>
@@ -353,7 +361,7 @@ export default function FactsView({ onPush }: FactsViewProps) {
                     type="button"
                     onClick={() =>
                       onPush(
-                        "Write a voiceover script and storyboard outline based on the research brief.",
+                        "Generate scene image prompts from the research brief.",
                         "write_script"
                       )
                     }
@@ -366,7 +374,7 @@ export default function FactsView({ onPush }: FactsViewProps) {
                         Working…
                       </>
                     ) : (
-                      <>Confirm & Write Script &rarr;</>
+                      <>Generate Scene Prompts &rarr;</>
                     )}
                   </button>
                 </div>
@@ -375,16 +383,16 @@ export default function FactsView({ onPush }: FactsViewProps) {
           </div>
 
           {/* Visual Reference + Sources Panel */}
-          <div className="flex flex-col gap-5 h-full min-h-0 overflow-hidden">
+          <div className="flex flex-col gap-4">
             {(summaries.visualAnalysis || summaries.thumbnailUrl) && (
-              <div className="flex flex-col bg-studio-surface border border-studio-border/60 rounded-2xl overflow-hidden shrink-0 max-h-[45%]">
+              <div className="flex flex-col bg-studio-surface border border-studio-border/60 rounded-2xl overflow-hidden">
                 <div className="px-4 py-3 bg-studio-border/20 border-b border-studio-border/40 flex items-center gap-2">
                   <Eye size={14} className="text-accent shrink-0" />
                   <span className="text-xs font-bold text-studio-text-primary uppercase tracking-wider">
                     Thumbnail Visual Analysis
                   </span>
                 </div>
-                <div className="p-4 overflow-y-auto space-y-3 select-text">
+                <div className="p-4 max-h-[min(40vh,360px)] overflow-y-auto overscroll-y-contain space-y-3 select-text">
                   {summaries.thumbnailUrl && (
                     <div className="rounded-xl overflow-hidden border border-studio-border/50 bg-black/40 max-w-[140px] mx-auto">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -407,8 +415,8 @@ export default function FactsView({ onPush }: FactsViewProps) {
               </div>
             )}
 
-          <div className="flex flex-col bg-studio-surface border border-studio-border/60 rounded-2xl overflow-hidden flex-1 min-h-0">
-            <div className="px-4 py-3 bg-studio-border/20 border-b border-studio-border/40 flex items-center justify-between gap-2">
+          <div className="flex flex-col bg-studio-surface border border-studio-border/60 rounded-2xl overflow-hidden">
+            <div className="px-3 sm:px-4 py-3 bg-studio-border/20 border-b border-studio-border/40 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 min-w-0">
                 <LinkIcon size={14} className="text-accent shrink-0" />
                 <span className="text-xs font-bold text-studio-text-primary uppercase tracking-wider truncate">
@@ -427,7 +435,7 @@ export default function FactsView({ onPush }: FactsViewProps) {
                 </button>
               )}
             </div>
-            <div className="p-4 flex-1 overflow-y-auto space-y-3">
+            <div className="p-4 max-h-[min(50vh,480px)] lg:max-h-none overflow-y-auto overscroll-y-contain space-y-3">
               {summaries.sources.length === 0 ? (
                 <div className="flex items-center gap-2 text-xs text-studio-text-secondary">
                   <AlertCircle size={14} />

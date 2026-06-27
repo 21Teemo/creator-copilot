@@ -231,7 +231,7 @@ def generate_trend_explanation(
     try:
         model = get_model()
         if not model:
-            return "No explanation available. (Gemini API Key not configured)"
+            return "No explanation available. (DEEPSEEK_API_KEY not configured)"
 
         platform = "TikTok" if _is_tiktok_url(video_url) else "YouTube"
         prompt = f"""

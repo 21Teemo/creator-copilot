@@ -120,16 +120,16 @@ export default function TrendsView({ projectId, onPush }: TrendsViewProps) {
 
   return (
     <div className="flex flex-col flex-1 h-full select-none">
-      <div className="flex items-center justify-between mb-4 shrink-0">
-        <div>
-          <h3 className="text-base font-bold text-studio-text-primary">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 shrink-0">
+        <div className="min-w-0">
+          <h3 className="text-sm sm:text-base font-bold text-studio-text-primary">
             Niche Trend Scan Results
           </h3>
           <p className="text-xs text-studio-text-secondary">
             Displaying {trends.length} matching content signals
           </p>
         </div>
-        <div className="px-2.5 py-1 rounded-full bg-accent/15 border border-accent/30 text-[10px] font-bold text-accent uppercase tracking-wider">
+        <div className="self-start sm:self-auto px-2.5 py-1 rounded-full bg-accent/15 border border-accent/30 text-[10px] font-bold text-accent uppercase tracking-wider shrink-0">
           {contentFormat === "short" ? "TikTok · 9:16" : "16:9 Horizontal Presets"}
         </div>
       </div>
@@ -138,7 +138,7 @@ export default function TrendsView({ projectId, onPush }: TrendsViewProps) {
         <div
           className={`grid gap-4 ${
             contentFormat === "short"
-              ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+              ? "grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
               : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
           }`}
         >
@@ -224,7 +224,7 @@ export default function TrendsView({ projectId, onPush }: TrendsViewProps) {
                   {item.description}
                 </p>
 
-                <div className="grid grid-cols-3 gap-1.5 mb-3 bg-studio-bg/60 p-2 rounded-xl border border-studio-border/30 text-[10px] shrink-0">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mb-3 bg-studio-bg/60 p-2 rounded-xl border border-studio-border/30 text-[10px] shrink-0">
                   <div className="flex flex-col items-center justify-center p-1 text-center">
                     <span className="text-studio-text-secondary font-medium mb-0.5 flex items-center gap-0.5">
                       <Flame size={10} className="text-amber-500 shrink-0" /> Virality
@@ -233,7 +233,7 @@ export default function TrendsView({ projectId, onPush }: TrendsViewProps) {
                       {item.viralityScore !== undefined && item.viralityScore !== null ? `${item.viralityScore}%` : "N/A"}
                     </span>
                   </div>
-                  <div className="flex flex-col items-center justify-center p-1 text-center border-x border-studio-border/30">
+                  <div className="flex flex-col items-center justify-center p-1 text-center sm:border-x sm:border-studio-border/30">
                     <span className="text-studio-text-secondary font-medium mb-0.5 flex items-center gap-0.5">
                       <MessageSquare size={10} className="text-accent shrink-0" /> Velocity
                     </span>
@@ -241,7 +241,7 @@ export default function TrendsView({ projectId, onPush }: TrendsViewProps) {
                       {item.commentVelocity !== undefined && item.commentVelocity !== null ? `${item.commentVelocity}/hr` : "N/A"}
                     </span>
                   </div>
-                  <div className="flex flex-col items-center justify-center p-1 text-center">
+                  <div className="flex flex-col items-center justify-center p-1 text-center col-span-2 sm:col-span-1">
                     <span className="text-studio-text-secondary font-medium mb-0.5 flex items-center gap-0.5">
                       <TrendingUp size={10} className="text-emerald-500 shrink-0" /> Sub Gap
                     </span>

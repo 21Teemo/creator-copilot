@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import { useMediaStore } from "@/stores/useMediaStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { apiRequest } from "@/lib/api";
+import { buildStockSearchRequest, buildSceneGenerateRequest, shouldUseAiSceneGeneration, visualPromptForStockSearch } from "@/lib/intentRouter";
+import { VisualReferencesPanel } from "./ScriptView";
 import { Image as ImageIcon, Camera, RefreshCw, Search, Plus, Download, Upload } from "lucide-react";
 
 interface SceneGalleryViewProps {
@@ -16,7 +18,7 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
   const params = useParams();
   const projectId = params?.projectId as string;
 
-  const { sceneImages, setSceneImages } = useMediaStore();
+  const { sceneImages, setSceneImages, visualReferences } = useMediaStore();
   const contentFormat = useProjectStore((state) => state.contentFormat);
   const [regeneratingScenes, setRegeneratingScenes] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -39,11 +41,27 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
       const currentScene = sceneImages.find((img) => img.sceneNumber === sceneNumber);
       if (!currentScene) return;
 
-      const res = await apiRequest(projectId, "/stock/search", "POST", {
-        prompt: currentScene.visualPrompt,
-      });
+      const searchPrompt = visualPromptForStockSearch(currentScene.visualPrompt);
+      const useAi = shouldUseAiSceneGeneration();
 
-      if (res && res.length > 0) {
+      const res = useAi
+        ? await apiRequest(
+            projectId,
+            "/generate/scene",
+            "POST",
+            buildSceneGenerateRequest(searchPrompt, sceneNumber)
+          )
+        : await apiRequest(projectId, "/stock/search", "POST", buildStockSearchRequest(searchPrompt));
+
+      if (useAi && res?.imageUrl) {
+        const updatedImages = sceneImages.map((img) =>
+          img.sceneNumber === sceneNumber ? { ...img, imageUrl: res.imageUrl } : img
+        );
+        setSceneImages(updatedImages);
+        return;
+      }
+
+      if (res && Array.isArray(res) && res.length > 0) {
         const candidates = res.filter((item: any) => item.imageUrl !== currentScene.imageUrl);
         const newImage = candidates.length > 0 ? candidates[0].imageUrl : res[0].imageUrl;
 
@@ -69,9 +87,7 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
     }
     setIsSearching(true);
     try {
-      const res = await apiRequest(projectId, "/stock/search", "POST", {
-        prompt: q,
-      });
+      const res = await apiRequest(projectId, "/stock/search", "POST", buildStockSearchRequest(q));
       if (res && Array.isArray(res)) {
         const mapped = res.map((item: any) => ({
           title: item.visualPrompt || "Stock Photo",
@@ -122,27 +138,32 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
     reader.readAsDataURL(file);
   };
 
+  const aiConsistencyEnabled = shouldUseAiSceneGeneration();
+
   if (sceneImages.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 text-center py-12">
         <ImageIcon size={40} className="text-studio-text-secondary mb-4" />
         <p className="text-sm text-studio-text-primary font-bold mb-1">No storyboard scenes generated yet</p>
-        <p className="text-xs text-studio-text-secondary max-w-sm">
-          Click the "Scene Pictures" control below or use the prompt bar to source stock assets and generate thumbnail frames.
-        </p>
+          <p className="text-xs text-studio-text-secondary max-w-sm">
+            Click the "Scene Pictures" control below or use the prompt bar to generate storyboard frames
+            {visualReferences.some((r) => r.imageUrl) ? " with FLUX identity lock from your visual references." : " from stock libraries."}
+          </p>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col flex-1 h-full select-none min-h-0">
-      <div className="flex items-center justify-between mb-4 shrink-0">
+      <VisualReferencesPanel />
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 shrink-0">
         <div>
           <h3 className="text-base font-bold text-studio-text-primary flex items-center gap-2">
             Generated Storyboard Frames
           </h3>
           <p className="text-xs text-studio-text-secondary">
             Aspect ratio adapted to {contentFormat === "short" ? "9:16 (Shorts)" : "16:9 (Long-form)"}
+            {aiConsistencyEnabled ? " · FLUX img2img locked to visual references" : ""}
           </p>
         </div>
       </div>
@@ -151,7 +172,7 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
         <div
           className={`grid gap-4 ${
             contentFormat === "short"
-              ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+              ? "grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
               : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
           }`}
         >
@@ -184,7 +205,7 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
                     </span>
                   </div>
 
-                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center gap-1.5">
+                  <div className="absolute top-3 right-3 opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center gap-1.5">
                     <button
                       onClick={() => handleDownloadImage(scene.imageUrl, scene.sceneNumber)}
                       title="Download image"
@@ -244,17 +265,17 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
 
         {/* Stock Library Search Panel */}
         <div className="pt-6 border-t border-studio-border/60 space-y-4">
-          <div className="flex items-center justify-between shrink-0">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between shrink-0">
             <h4 className="text-xs font-bold text-studio-text-primary flex items-center gap-1.5 uppercase tracking-wider">
               <Search size={14} className="text-accent" />
               Search Stock Libraries
             </h4>
-            <span className="text-[9px] font-bold text-accent px-2 py-0.5 rounded bg-accent/15 border border-accent/30 uppercase tracking-widest">
+            <span className="self-start sm:self-auto text-[9px] font-bold text-accent px-2 py-0.5 rounded bg-accent/15 border border-accent/30 uppercase tracking-widest">
               Pexels & Pixabay Integrated
             </span>
           </div>
 
-          <form onSubmit={handleSearch} className="flex gap-2">
+          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-studio-text-secondary" />
               <input
@@ -267,7 +288,7 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
             </div>
             <button
               type="submit"
-              className="px-4 py-2 bg-accent hover:bg-accent/90 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer shadow-md"
+              className="w-full sm:w-auto px-4 py-2 bg-accent hover:bg-accent/90 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer shadow-md shrink-0"
             >
               Search
             </button>

@@ -67,14 +67,14 @@ export default function OutputFrame({ projectId, onSelectPrompt, onPublish }: Ou
     <main className="flex-1 flex flex-col bg-studio-surface rounded-studio border border-studio-border shadow-studio overflow-hidden relative min-h-0 transition-all duration-300">
       {/* Dynamic Stale Data Banner */}
       {showStaleBanner && (
-        <div className="absolute top-0 inset-x-0 bg-accent-muted/95 border-b border-accent/30 px-4 py-3 flex items-center justify-between z-30 animate-fade-in backdrop-blur-md">
-          <div className="flex items-center gap-2 text-xs text-studio-text-primary font-medium">
+        <div className="absolute top-0 inset-x-0 bg-accent-muted/95 border-b border-accent/30 px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between z-30 animate-fade-in backdrop-blur-md">
+          <div className="flex items-start sm:items-center gap-2 text-xs text-studio-text-primary font-medium min-w-0">
             <AlertCircle size={14} className="text-accent shrink-0" />
             <span>
               Switched to <strong className="capitalize">{contentFormat}</strong> mode. Previews updated. Re-run current step for best results.
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
             {regenDetails && (
               <button
                 onClick={() => onSelectPrompt(regenDetails.prompt, regenDetails.action)}
@@ -95,7 +95,7 @@ export default function OutputFrame({ projectId, onSelectPrompt, onPublish }: Ou
       )}
 
       {/* Render Canvas */}
-      <div className="flex-1 p-6 flex flex-col overflow-hidden">
+      <div className="flex-1 p-3 sm:p-4 md:p-6 flex flex-col min-h-0 overflow-y-auto overscroll-y-contain">
         {loading ? (
           <SkeletonLoader view={activeView} contentFormat={contentFormat} />
         ) : (
@@ -121,7 +121,11 @@ function renderView(
     case "facts":
       return <FactsView onPush={onSelectPrompt} />;
     case "script":
-      return <ScriptView onPush={onSelectPrompt} />;
+      return (
+        <div className="flex flex-col flex-1 min-h-0">
+          <ScriptView onPush={onSelectPrompt} />
+        </div>
+      );
     case "scenes":
       return <SceneGalleryView onPush={onSelectPrompt} />;
     case "video":
@@ -152,7 +156,7 @@ function SkeletonLoader({ view, contentFormat }: { view: StudioView; contentForm
           <div
             className={`grid gap-4 flex-1 ${
               isShort
-                ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+                ? "grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
                 : "grid-cols-1 md:grid-cols-3"
             }`}
           >
@@ -201,8 +205,8 @@ function SkeletonLoader({ view, contentFormat }: { view: StudioView; contentForm
           <div
             className={`grid gap-4 flex-1 ${
               isShort
-                ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
-                : "grid-cols-1 sm:grid-cols-3"
+                ? "grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+                : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
             }`}
           >
             {Array.from({ length: isShort ? 5 : 3 }).map((_, idx) => (

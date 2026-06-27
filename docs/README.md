@@ -74,6 +74,6 @@ creator-copilot/
 
 ## Environment
 
-- **Research Service**: `services/research/.env` — set `GEMINI_API_KEY` for LLM synthesis.
-- **Media Service**: ElevenLabs API key for voice synthesis; FLUX/Imagen credentials for thumbnail generation.
+- **Research / Scripting / SEO**: `services/.env` — `DEEPSEEK_API_KEY` for text generation; `GEMINI_API_KEY` for thumbnail vision analysis and grading.
+- **Media Service**: ElevenLabs API key for voice synthesis; `REPLICATE_API_TOKEN` for FLUX scene generation (PuLID/Kontext img2img).
 - Each microservice runs in its own isolated Python `venv`.

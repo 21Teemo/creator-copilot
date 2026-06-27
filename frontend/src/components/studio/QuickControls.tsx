@@ -65,9 +65,10 @@ export default function QuickControls({ onActionClick }: QuickControlsProps) {
   // Dropdown menu state removed
 
   return (
-    <div className="relative flex items-center justify-center shrink-0 py-2">
+    <div className="relative flex items-center justify-center shrink-0 py-1 sm:py-2 w-full max-w-full px-1">
+      <div className="max-w-full overflow-x-auto scrollbar-thin -mx-1 px-1">
       {/* Floating Glass Pill */}
-      <div className="flex items-center gap-2 p-1.5 rounded-full bg-[#1A1A1F]/80 backdrop-blur-xl border border-studio-border/50 shadow-2xl z-30 select-none">
+      <div className="flex flex-nowrap items-center gap-2 p-1.5 rounded-full bg-[#1A1A1F]/80 backdrop-blur-xl border border-studio-border/50 shadow-2xl z-30 select-none w-max mx-auto">
         {/* Suggested Action Chips */}
         {suggestedActions.map((action) => {
           const isActive = currentActiveAction === action.id;
@@ -77,7 +78,7 @@ export default function QuickControls({ onActionClick }: QuickControlsProps) {
             <button
               key={action.id}
               onClick={() => onActionClick(action.id)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer shrink-0 whitespace-nowrap ${
                 isActive
                   ? "bg-accent-muted border border-accent/40 text-studio-text-primary ring-1 ring-accent/15"
                   : isRecommended
@@ -100,7 +101,7 @@ export default function QuickControls({ onActionClick }: QuickControlsProps) {
         {displayAudioToggle && (
           <button
             onClick={() => setAddAudioEnabled(!addAudioEnabled)}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer border ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 whitespace-nowrap ${
               addAudioEnabled
                 ? "bg-studio-success/15 border-studio-success/50 text-studio-success"
                 : "bg-transparent border-studio-border/60 text-studio-text-secondary hover:text-studio-text-primary hover:bg-studio-border/25"
@@ -115,6 +116,7 @@ export default function QuickControls({ onActionClick }: QuickControlsProps) {
         )}
 
         {/* Overflow dropdown menu removed */}
+      </div>
       </div>
     </div>
   );

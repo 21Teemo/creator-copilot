@@ -106,7 +106,7 @@ Each service runs via **uvicorn** in its own directory under `services/`.
 | Article & Document Summarizer | `POST /research/summarize` | Gemini |
 | Brainstorming & Niche Trends | `POST /research/trends/short`, `/trends/long` | `yt-dlp` (`ytsearch5:`) |
 
-**Env:** `services/research/.env` — `GEMINI_API_KEY`
+**Env:** `services/.env` — `DEEPSEEK_API_KEY`
 
 ### Scripting Service (`services/scripting/`)
 
@@ -184,7 +184,7 @@ Frontend is started separately: `npm run start` on `:3000`.
 services/
 ├── research/
 │   ├── venv/
-│   ├── .env                  # GEMINI_API_KEY
+│   ├── .env                  # DEEPSEEK_API_KEY
 │   └── app/                  # FastAPI routers
 ├── scripting/
 │   ├── venv/

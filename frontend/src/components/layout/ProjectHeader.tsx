@@ -15,13 +15,13 @@ export default function ProjectHeader({ projectId }: ProjectHeaderProps) {
     .join(" ");
 
   return (
-    <header className="h-14 flex items-center justify-between px-2 bg-studio-bg/80 backdrop-blur-sm border-b border-studio-border/20 z-40">
+    <header className="h-12 sm:h-14 flex items-center justify-between px-1 sm:px-2 bg-studio-bg/80 backdrop-blur-sm border-b border-studio-border/20 z-40 shrink-0">
       <div className="flex items-center gap-2">
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 border border-accent/20 text-accent">
           <Sparkles size={16} />
         </div>
         <div>
-          <h1 className="text-sm font-bold text-studio-text-primary tracking-tight truncate max-w-[200px] sm:max-w-md">
+          <h1 className="text-sm font-bold text-studio-text-primary tracking-tight truncate max-w-[160px] sm:max-w-md">
             {displayName}
           </h1>
           <p className="text-[10px] text-studio-text-secondary leading-none">

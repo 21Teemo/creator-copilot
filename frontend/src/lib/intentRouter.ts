@@ -2,7 +2,7 @@ import { useProjectStore, ContentFormat } from "../stores/useProjectStore";
 import { useStudioStore, StudioView } from "../stores/useStudioStore";
 import { useResearchStore, type TrendItem } from "../stores/useResearchStore";
 import { useScriptingStore } from "../stores/useScriptingStore";
-import { useMediaStore } from "../stores/useMediaStore";
+import { useMediaStore, type VisualReference, type VisualReferenceCategory } from "../stores/useMediaStore";
 import { useSeoStore } from "../stores/useSeoStore";
 import { apiRequest } from "./api";
 import { ActionChipType } from "./quickControls";
@@ -63,39 +63,186 @@ function buildFactFinderPrompt(userPrompt: string, trendOverride?: TrendItem | n
   return parts.join("\n\n");
 }
 
-function buildScriptPrompt(userPrompt: string): string {
+function stripHashtagsAndMentions(text: string): string {
+  return text.replace(/#\w+/g, "").replace(/@\w+/g, "").replace(/\s{2,}/g, " ").trim();
+}
+
+function extractCreativeAngle(summaryText: string): string {
+  const skip =
+    /^(title|channel|views|duration|description|video url|creator brief|visual reference|visual style|citations?|this brief)\s*:/i;
+  const picks: string[] = [];
+
+  for (const line of summaryText.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.includes("===") || /https?:\/\//i.test(trimmed)) continue;
+    if (skip.test(trimmed)) continue;
+    if (/DEEPSEEK/i.test(trimmed) || /Enable DEEPSEEK/i.test(trimmed)) continue;
+    if (trimmed.length > 160) continue;
+
+    if (
+      /^(hook focus|pacing|target audience|key takeaway|narrative|tone|visual format)/i.test(trimmed) ||
+      picks.length < 4
+    ) {
+      picks.push(trimmed);
+    }
+    if (picks.join(" ").length > 350) break;
+  }
+
+  return picks.join("\n").slice(0, 400);
+}
+
+function isPlaceholderVisualAnalysis(text: string): boolean {
+  return !text || /Enable DEEPSEEK/i.test(text) || /Visual reference: thumbnail/i.test(text);
+}
+
+function getVisualReferencesPayload(): Pick<VisualReference, "category" | "label" | "imageUrl">[] {
+  return useMediaStore.getState().visualReferences.map(({ category, label, imageUrl }) => ({
+    category,
+    label,
+    imageUrl,
+  }));
+}
+
+function referenceKeywords(): string {
+  return useMediaStore
+    .getState()
+    .visualReferences.map((r) => r.label.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function buildScriptPayload(userPrompt: string, contentFormat: ContentFormat) {
   const { summaries, activeTrend } = useResearchStore.getState();
-  const parts: string[] = [];
+  const topic =
+    stripHashtagsAndMentions(activeTrend?.title || "") ||
+    stripHashtagsAndMentions(
+      summaries?.summaryText
+        ?.split("\n")
+        .find((l) => /^hook focus/i.test(l.trim()))?.replace(/^hook focus:\s*/i, "") || ""
+    ) ||
+    userPrompt.trim().slice(0, 80);
 
-  if (activeTrend) {
-    parts.push("=== TRENDING VIDEO ===");
-    parts.push(formatTrendContext(activeTrend));
-  }
+  const creativeAngle = summaries?.summaryText ? extractCreativeAngle(summaries.summaryText) : "";
 
-  if (summaries?.summaryText?.trim()) {
-    parts.push("=== RESEARCH BRIEF (required source material — stay on this topic) ===");
-    parts.push(summaries.summaryText);
-    if (summaries.visualAnalysis) {
-      parts.push("=== VISUAL FORMAT (from thumbnail — match in storyboard scenes) ===");
-      parts.push(summaries.visualAnalysis);
-    }
-    if (summaries.sources.length > 0) {
-      parts.push(
-        "Citations:\n" +
-          summaries.sources.map((s, i) => `[${i + 1}] ${s.title} – ${s.url}`).join("\n")
-      );
-    }
-  }
+  const rawVisual = (summaries?.visualAnalysis || activeTrend?.visualAnalysis || "").trim();
+  const visualStyleNotes = isPlaceholderVisualAnalysis(rawVisual) ? "" : rawVisual.slice(0, 400);
 
-  const instruction =
+  const task =
     userPrompt.trim() && !userPrompt.startsWith("Drafting script")
       ? userPrompt
-      : "Write a voiceover script and storyboard outline strictly based on the research brief above. Use only facts and angles from the brief — do not invent an unrelated topic.";
+      : "Plan 3-5 scenes. visualPrompt = standalone image search prompt per scene. narrationText = short voiceover line. Do not repeat the research brief.";
 
-  parts.push("=== INSTRUCTIONS ===");
-  parts.push(instruction);
+  return {
+    topic,
+    creativeAngle,
+    visualStyleNotes,
+    visualReferences: getVisualReferencesPayload(),
+    contentFormat,
+    prompt: task,
+  };
+}
 
-  return parts.join("\n\n");
+function sanitizeNarrationText(text: string): string {
+  let t = text || "";
+  for (const marker of ["TOPIC:", "RESEARCH SUMMARY:", "===", "TASK:", "Creator Brief:"]) {
+    const idx = t.indexOf(marker);
+    if (idx > 0) t = t.slice(0, idx);
+  }
+  return t.replace(/https?:\/\/\S+/g, "").replace(/\s{2,}/g, " ").trim();
+}
+
+function sanitizeVisualPromptText(text: string): string {
+  let t = (text || "").replace(/https?:\/\/\S+/g, "").replace(/#\w+/g, "").trim();
+  for (const marker of ["TOPIC:", "RESEARCH SUMMARY", "Creator Brief", "===", "TASK:", "Welcome to this video about"]) {
+    const idx = t.indexOf(marker);
+    if (idx > 0) t = t.slice(0, idx);
+  }
+  if (/DEEPSEEK_API|Video URL|Channel:/i.test(t)) return "";
+  return t.replace(/\s{2,}/g, " ").trim().slice(0, 220);
+}
+
+function sanitizeStoryboardScenes(
+  scenes: { sceneNumber: number; visualPrompt: string; narrationText: string }[]
+) {
+  return scenes.map((scene) => ({
+    ...scene,
+    visualPrompt: sanitizeVisualPromptText(scene.visualPrompt),
+    narrationText: sanitizeNarrationText(scene.narrationText),
+  }));
+}
+
+export function visualPromptForStockSearch(visualPrompt: string): string {
+  const cleaned = visualPrompt
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/#\w+/g, "")
+    .replace(/@\w+/g, "")
+    .trim();
+  const firstClause = cleaned.split(/[.!?]/)[0]?.trim() || cleaned;
+  const base = firstClause.slice(0, 120) || "cinematic scene";
+  const refs = referenceKeywords();
+  if (!refs) return base;
+  return `${base}, ${refs}`.slice(0, 200);
+}
+
+function stockSearchBody(prompt: string) {
+  return {
+    prompt,
+    visualReferences: getVisualReferencesPayload(),
+  };
+}
+
+export function buildStockSearchRequest(prompt: string) {
+  return stockSearchBody(prompt);
+}
+
+export function shouldUseAiSceneGeneration(): boolean {
+  return useMediaStore
+    .getState()
+    .visualReferences.some((ref) => Boolean(ref.imageUrl?.trim()));
+}
+
+function sceneGenerateBody(prompt: string, sceneNumber?: number) {
+  const { contentFormat } = useProjectStore.getState();
+  return {
+    prompt,
+    sceneNumber,
+    visualReferences: getVisualReferencesPayload(),
+    contentFormat,
+  };
+}
+
+export function buildSceneGenerateRequest(prompt: string, sceneNumber?: number) {
+  return sceneGenerateBody(prompt, sceneNumber);
+}
+
+async function fetchSceneImage(
+  projectId: string,
+  prompt: string,
+  sceneNumber: number
+): Promise<{ sceneNumber: number; imageUrl: string; visualPrompt: string } | null> {
+  const searchPrompt = visualPromptForStockSearch(prompt);
+
+  if (shouldUseAiSceneGeneration()) {
+    const res = await apiRequest(projectId, "/generate/scene", "POST", buildSceneGenerateRequest(searchPrompt, sceneNumber));
+    if (res?.imageUrl) {
+      return {
+        sceneNumber,
+        imageUrl: res.imageUrl,
+        visualPrompt: prompt,
+      };
+    }
+    return null;
+  }
+
+  const res = await apiRequest(projectId, "/stock/search", "POST", stockSearchBody(searchPrompt));
+  if (res?.[0]?.imageUrl) {
+    return {
+      sceneNumber,
+      imageUrl: res[0].imageUrl,
+      visualPrompt: prompt,
+    };
+  }
+  return null;
 }
 
 export type StudioAction = ActionChipType | "refine";
@@ -254,9 +401,7 @@ export async function dispatchStudioAction(
         projectStore.setLastGeneratedFormat(currentFormat);
       } else if (currentView === "scenes") {
         const mediaStore = useMediaStore.getState();
-        const res = await apiRequest(projectId, "/stock/search", "POST", {
-          prompt: `Refine keyframe scenes: ${prompt}`,
-        });
+        const res = await apiRequest(projectId, "/stock/search", "POST", stockSearchBody(`Refine keyframe scenes: ${prompt}`));
         mediaStore.setSceneImages(res);
         projectStore.setLastGeneratedFormat(currentFormat);
       } else if (currentView === "video") {
@@ -321,18 +466,53 @@ export async function dispatchStudioAction(
         if (activeTrend?.thumbnailUrl && !activeTrend.visualAnalysis) {
           await ensureTrendVisualAnalysis(projectId, activeTrend);
         }
-        const scriptPrompt = buildScriptPrompt(prompt);
-        const res = await apiRequest(projectId, "/scripting/storyboard", "POST", { prompt: scriptPrompt });
-        useScriptingStore.getState().setScript(res.script);
+        const scriptPayload = buildScriptPayload(prompt, currentFormat);
+        const res = await apiRequest(projectId, "/scripting/storyboard", "POST", scriptPayload);
+        const storyboard = sanitizeStoryboardScenes(res.storyboard || []);
+        const script =
+          sanitizeNarrationText(res.script) ||
+          storyboard.map((s) => s.narrationText).filter(Boolean).join("\n\n");
+        useScriptingStore.getState().setStoryboard(storyboard);
         useScriptingStore.getState().setOutline(res.outline || []);
-        useScriptingStore.getState().setStoryboard(res.storyboard || []);
+        useScriptingStore.getState().setScript(script);
         projectStore.setLastGeneratedFormat(currentFormat);
         break;
       }
       case "scene_pictures": {
         studioStore.setActiveView("scenes");
-        const res = await apiRequest(projectId, "/stock/search", "POST", { prompt });
-        useMediaStore.getState().setSceneImages(res);
+        const scriptingStore = useScriptingStore.getState();
+        const storyboard = scriptingStore.storyboard;
+
+        if (storyboard.length > 0) {
+          const sceneImages: { sceneNumber: number; imageUrl: string; visualPrompt: string }[] = [];
+          for (const scene of storyboard) {
+            const image = await fetchSceneImage(projectId, scene.visualPrompt, scene.sceneNumber);
+            if (image) sceneImages.push(image);
+          }
+          useMediaStore.getState().setSceneImages(sceneImages);
+        } else {
+          const searchPrompt = visualPromptForStockSearch(prompt);
+          if (shouldUseAiSceneGeneration()) {
+            const res = await apiRequest(
+              projectId,
+              "/generate/scene",
+              "POST",
+              buildSceneGenerateRequest(searchPrompt, 1)
+            );
+            if (res?.imageUrl) {
+              useMediaStore.getState().setSceneImages([
+                {
+                  sceneNumber: 1,
+                  imageUrl: res.imageUrl,
+                  visualPrompt: prompt,
+                },
+              ]);
+            }
+          } else {
+            const res = await apiRequest(projectId, "/stock/search", "POST", stockSearchBody(searchPrompt));
+            useMediaStore.getState().setSceneImages(res);
+          }
+        }
         projectStore.setLastGeneratedFormat(currentFormat);
         break;
       }

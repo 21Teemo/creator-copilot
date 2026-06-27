@@ -204,7 +204,7 @@ export default function PromptInputBar({ projectId, onSubmit, disabled }: Prompt
   const isSubmitDisabled = !prompt.trim() || disabled || isUploading;
 
   return (
-    <div className="w-full max-w-3xl mx-auto mb-6 shrink-0 relative px-2">
+    <div className="w-full max-w-3xl mx-auto mb-3 sm:mb-6 shrink-0 relative px-2 pb-[env(safe-area-inset-bottom)]">
       <form
         onSubmit={(e) => void handleSend(e)}
         className="flex items-center gap-3 bg-studio-surface border border-studio-border rounded-2xl px-4 py-3 shadow-studio focus-within:ring-2 focus-within:ring-accent/50 focus-within:ring-offset-2 focus-within:ring-offset-studio-bg transition-all duration-300"

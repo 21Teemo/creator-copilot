@@ -10,6 +10,7 @@ from typing import Optional, List
 from celery.result import AsyncResult
 
 from media.services.stock import search_pexels_photos, search_pexels_videos
+from media.services.image_gen import generate_scene_image
 from media.futures.render_tasks import celery_app, render_video
 from media.config import (
     CLOUDINARY_CLOUD_NAME,
@@ -31,10 +32,22 @@ app.add_middleware(
 )
 
 # Pydantic Schemas for Requests/Responses
+class VisualReferenceItem(BaseModel):
+    category: str
+    label: str
+    imageUrl: Optional[str] = None
+
 class SearchPayload(BaseModel):
     prompt: str
+    visualReferences: Optional[List[VisualReferenceItem]] = None
     contentFormat: Optional[str] = "long"
     includeAudio: Optional[bool] = True
+
+class SceneGeneratePayload(BaseModel):
+    prompt: str
+    sceneNumber: Optional[int] = None
+    visualReferences: Optional[List[VisualReferenceItem]] = None
+    contentFormat: Optional[str] = "long"
 
 class StoryboardItem(BaseModel):
     sceneNumber: int
@@ -123,8 +136,26 @@ router = APIRouter(prefix="/api/v1/projects/{projectId}")
 
 @router.post("/stock/search")
 async def get_stock_photos(projectId: str, payload: SearchPayload):
-    photos = search_pexels_photos(payload.prompt)
+    refs = [r.model_dump() for r in (payload.visualReferences or [])]
+    photos = search_pexels_photos(payload.prompt, visual_references=refs)
     return photos
+
+@router.post("/generate/scene")
+async def generate_scene_picture(projectId: str, payload: SceneGeneratePayload):
+    refs = [r.model_dump() for r in (payload.visualReferences or [])]
+    static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+    result = generate_scene_image(
+        prompt=payload.prompt,
+        visual_references=refs,
+        content_format=payload.contentFormat or "long",
+        project_id=projectId,
+        static_dir=static_dir,
+    )
+    if payload.sceneNumber is not None:
+        result["sceneNumber"] = payload.sceneNumber
+    if not result.get("imageUrl"):
+        raise HTTPException(status_code=502, detail="Scene image generation returned no image")
+    return result
 
 @router.post("/stock/videos")
 async def get_stock_videos(projectId: str, payload: SearchPayload):

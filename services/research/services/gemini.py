@@ -1,78 +1,69 @@
 import re
 import httpx
-import google.generativeai as genai
-from research.config import GEMINI_API_KEY
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+from deepseek_client import (
+    chat_json,
+    chat_text,
+    get_model,
+    is_configured,
+)
+from gemini_vision import analyze_image, is_gemini_configured
 
-def get_model(name="gemini-2.5-flash", use_search=False):
-    if not GEMINI_API_KEY:
-        return None
-    # Enable Google Search grounding if requested
-    tools = [{"google_search_retrieval": {}}] if use_search else None
-    return genai.GenerativeModel(name, tools=tools)
+__all__ = ["get_model", "perform_web_search", "perform_summarization", "analyze_trend_thumbnail", "strip_markdown"]
+
 
 def perform_web_search(prompt: str) -> dict:
-    if not GEMINI_API_KEY:
+    if not is_configured():
         return {
             "sources": [
                 {
                     "title": f"Introductory Guide to {prompt}",
                     "url": "https://wikipedia.org/wiki/Special:Search?search=" + prompt.replace(" ", "+"),
-                    "snippet": f"A comprehensive baseline article discussing key concepts of {prompt}."
+                    "snippet": f"A comprehensive baseline article discussing key concepts of {prompt}.",
                 },
                 {
                     "title": f"Recent trends in {prompt} (Medium)",
                     "url": "https://medium.com/search?q=" + prompt.replace(" ", "+"),
-                    "snippet": f"Industry analysis and creator blogs focusing on {prompt} workflows."
-                }
+                    "snippet": f"Industry analysis and creator blogs focusing on {prompt} workflows.",
+                },
             ]
         }
-        
+
     try:
-        model = get_model(use_search=True)
-        response = model.generate_content(
-            f"Search the web and find the most relevant sources and facts for: {prompt}. Return a concise summary of the facts."
+        raw = chat_json(
+            f"Research this topic and return JSON with a 'sources' array (3-5 items). "
+            f"Each item needs title, url, snippet. Topic: {prompt}",
+            system_prompt=(
+                "You are a research assistant. Prefer real, well-known domains when possible. "
+                "If you cannot verify a URL, use a plausible search URL for that site."
+            ),
         )
-        
-        sources = []
-        try:
-            candidate = response.candidates[0]
-            if hasattr(candidate, "grounding_metadata") and candidate.grounding_metadata:
-                metadata = candidate.grounding_metadata
-                if hasattr(metadata, "grounding_chunks") and metadata.grounding_chunks:
-                    for chunk in metadata.grounding_chunks:
-                        if hasattr(chunk, "web") and chunk.web:
-                            sources.append({
-                                "title": chunk.web.title or "Web Source",
-                                "url": chunk.web.uri,
-                                "snippet": chunk.web.title
-                            })
-        except Exception as e:
-            print(f"Error parsing grounding metadata: {e}")
-            
-        if not sources:
-            sources = [
-                {
-                    "title": f"Google Search results for {prompt}",
-                    "url": "https://www.google.com/search?q=" + prompt.replace(" ", "+"),
-                    "snippet": "Search results for: " + prompt
-                }
-            ]
-            
-        return {"sources": sources}
+        sources = raw.get("sources") if isinstance(raw, dict) else None
+        if isinstance(sources, list) and sources:
+            cleaned = []
+            for item in sources[:5]:
+                if not isinstance(item, dict):
+                    continue
+                url = (item.get("url") or "").strip()
+                title = (item.get("title") or "Web Source").strip()
+                snippet = (item.get("snippet") or title).strip()
+                if url.startswith("http"):
+                    cleaned.append({"title": title, "url": url, "snippet": snippet})
+            if cleaned:
+                return {"sources": cleaned}
     except Exception as e:
-        print(f"Gemini search failed: {e}")
-        return {
-            "sources": [
-                {
-                    "title": "Google Search Fallback",
-                    "url": "https://google.com/search?q=" + prompt.replace(" ", "+"),
-                    "snippet": f"Failed to retrieve live Gemini grounding sources. Error: {str(e)}"
-                }
-            ]
-        }
+        print(f"DeepSeek search failed: {e}")
+
+    return {
+        "sources": [
+            {
+                "title": f"Google Search results for {prompt}",
+                "url": "https://www.google.com/search?q=" + prompt.replace(" ", "+"),
+                "snippet": "Search results for: " + prompt,
+            }
+        ]
+    }
+
 
 def strip_markdown(text: str) -> str:
     if not text:
@@ -116,37 +107,34 @@ def _load_image_data(image_url: str) -> dict:
 def analyze_trend_thumbnail(thumbnail_url: str, title: str = "", description: str = "") -> str:
     if not thumbnail_url:
         return ""
-    if not GEMINI_API_KEY:
+    if not is_gemini_configured():
         return (
             f"Visual reference: thumbnail for '{title or 'trending video'}'. "
-            "Enable GEMINI_API_KEY for AI vision analysis of format, on-screen text, and aesthetic."
+            "Set GEMINI_API_KEY in services/.env for AI vision analysis of format, on-screen text, and aesthetic."
         )
+
+    context_lines = []
+    if title:
+        context_lines.append(f"Video title: {title}")
+    if description:
+        context_lines.append(f"Description: {description}")
+    context = "\n".join(context_lines)
+
+    prompt = (
+        "Analyze this trending short-form video thumbnail or cover frame. Describe:\n"
+        "1. Visual format (e.g. iMessage/text chat UI, POV, talking head, lyric card, split screen)\n"
+        "2. Any on-screen text you can read verbatim\n"
+        "3. Color palette and aesthetic mood\n"
+        "4. Composition, UI elements, and layout\n"
+        "5. Why this visual style hooks viewers\n"
+        "6. Concrete steps to replicate this format for a similar music promo video\n\n"
+        "Be specific and actionable. Plain text only, no markdown."
+        + (f"\n\n{context}" if context else "")
+    )
 
     try:
         image_part = _load_image_data(thumbnail_url)
-        model = get_model()
-        context_lines = []
-        if title:
-            context_lines.append(f"Video title: {title}")
-        if description:
-            context_lines.append(f"Description: {description}")
-        context = "\n".join(context_lines)
-
-        response = model.generate_content(
-            [
-                "Analyze this trending short-form video thumbnail or cover frame. Describe:\n"
-                "1. Visual format (e.g. iMessage/text chat UI, POV, talking head, lyric card, split screen)\n"
-                "2. Any on-screen text you can read verbatim\n"
-                "3. Color palette and aesthetic mood\n"
-                "4. Composition, UI elements, and layout\n"
-                "5. Why this visual style hooks viewers\n"
-                "6. Concrete steps to replicate this format for a similar music promo video\n\n"
-                "Be specific and actionable. Plain text only, no markdown."
-                + (f"\n\n{context}" if context else ""),
-                image_part,
-            ]
-        )
-        return response.text.strip()
+        return analyze_image(prompt, image_part)
     except Exception as e:
         print(f"Trend thumbnail analysis failed: {e}")
         return ""
@@ -160,7 +148,7 @@ def perform_summarization(prompt: str, visual_analysis: str = "") -> dict:
             + strip_markdown(visual_analysis)
         )
 
-    if not GEMINI_API_KEY:
+    if not is_configured():
         base = strip_markdown(
             f"Creator Brief: {prompt}\n\n"
             f"This brief summarizes the key findings for '{prompt}'. It highlights target audience interest, "
@@ -172,9 +160,8 @@ def perform_summarization(prompt: str, visual_analysis: str = "") -> dict:
             "summaryText": base + visual_section,
             "sources": [{"title": "Default Creator Template", "url": "https://youtube.com"}],
         }
-        
+
     try:
-        model = get_model()
         system_instructions = (
             "You are a helpful assistant. Synthesize the provided query, transcripts, or research notes into a detailed, "
             "professional Creator Brief in plain text only. Do not use Markdown or any formatting characters "
@@ -186,26 +173,19 @@ def perform_summarization(prompt: str, visual_analysis: str = "") -> dict:
             "and how to replicate it shot-by-shot. Do not replace it with generic golden-hour aesthetic advice. "
             "The brief should outline the core hook, structure, and key narrative insights."
         )
-        response = model.generate_content(
-            f"{system_instructions}\n\nInput Content:\n{prompt}"
+        summary_text = strip_markdown(
+            chat_text(f"{system_instructions}\n\nInput Content:\n{prompt}", temperature=0.5)
         )
-        
-        urls = re.findall(r'(https?://[^\s)]+)', prompt)
+
+        urls = re.findall(r"(https?://[^\s)]+)", prompt)
         sources = [{"title": f"Source {i+1}", "url": url} for i, url in enumerate(list(set(urls))[:3])]
         if not sources:
-            sources = [{"title": "Gemini Synthesis Engine", "url": "https://ai.google.dev"}]
+            sources = [{"title": "DeepSeek Synthesis", "url": "https://platform.deepseek.com"}]
 
-        summary_text = strip_markdown(response.text)
         if visual_analysis and "Visual Format Reference" not in summary_text:
             summary_text = summary_text.rstrip() + visual_section
-            
-        return {
-            "summaryText": summary_text,
-            "sources": sources
-        }
+
+        return {"summaryText": summary_text, "sources": sources}
     except Exception as e:
-        print(f"Gemini summarization failed: {e}")
-        return {
-            "summaryText": f"Error synthesizing brief: {str(e)}",
-            "sources": []
-        }
+        print(f"DeepSeek summarization failed: {e}")
+        return {"summaryText": f"Error synthesizing brief: {str(e)}", "sources": []}

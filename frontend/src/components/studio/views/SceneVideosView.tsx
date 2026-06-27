@@ -136,7 +136,7 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
 
   return (
     <div className="flex flex-col flex-1 h-full select-none min-h-0">
-      <div className="flex items-center justify-between mb-4 shrink-0">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 shrink-0">
         <div>
           <h3 className="text-base font-bold text-studio-text-primary flex items-center gap-2">
             Generated Storyboard Video Clips
@@ -151,7 +151,7 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
         <div
           className={`grid gap-4 ${
             contentFormat === "short"
-              ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+              ? "grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
               : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
           }`}
         >
@@ -190,7 +190,7 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
                     </span>
                   </div>
 
-                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center gap-1.5">
+                  <div className="absolute top-3 right-3 opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center gap-1.5">
                     <button
                       onClick={() => handleDownloadVideo(scene.videoUrl, scene.sceneNumber)}
                       title="Download video"
@@ -250,17 +250,17 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
 
         {/* Stock Library Search Panel */}
         <div className="pt-6 border-t border-studio-border/60 space-y-4">
-          <div className="flex items-center justify-between shrink-0">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between shrink-0">
             <h4 className="text-xs font-bold text-studio-text-primary flex items-center gap-1.5 uppercase tracking-wider">
               <Search size={14} className="text-accent" />
               Search Stock Libraries
             </h4>
-            <span className="text-[9px] font-bold text-accent px-2 py-0.5 rounded bg-accent/15 border border-accent/30 uppercase tracking-widest">
+            <span className="self-start sm:self-auto text-[9px] font-bold text-accent px-2 py-0.5 rounded bg-accent/15 border border-accent/30 uppercase tracking-widest">
               Pexels & Pixabay Integrated
             </span>
           </div>
 
-          <form onSubmit={handleSearch} className="flex gap-2">
+          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-studio-text-secondary" />
               <input
@@ -273,7 +273,7 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
             </div>
             <button
               type="submit"
-              className="px-4 py-2 bg-accent hover:bg-accent/90 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer shadow-md"
+              className="w-full sm:w-auto px-4 py-2 bg-accent hover:bg-accent/90 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer shadow-md shrink-0"
             >
               Search
             </button>

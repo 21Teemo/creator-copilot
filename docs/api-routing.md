@@ -21,7 +21,7 @@ Endpoints are grouped below by **creator workflow stage**.
 `POST /api/v1/projects/:projectId/research/web-search`
 
 - `youtube_transcript_api` — `YouTubeTranscriptApi().fetch()` for real transcripts
-- **Gemini API** — LLM synthesis when `GEMINI_API_KEY` is set in `services/research/.env`
+- **DeepSeek API** — LLM synthesis when `DEEPSEEK_API_KEY` is set in `services/.env`
 
 ### Article & Document Summarizer
 
@@ -76,9 +76,19 @@ Endpoints are grouped below by **creator workflow stage**.
 
 - Searches stock video libraries (Pexels, Pixabay) for video clips matching project context
 
+### Scene Image Generation (FLUX img2img)
+
+`POST /api/v1/projects/:projectId/generate/scene`
+
+- When visual reference images are uploaded, generates scene frames via Replicate:
+  - **Character ref** → `bytedance/flux-pulid` (identity lock)
+  - **Environment/gadget ref** → `black-forest-labs/flux-kontext-dev` (img2img)
+- Falls back to Pexels stock search if `REPLICATE_API_TOKEN` is unset or generation fails
+- Body: `{ prompt, sceneNumber?, visualReferences?, contentFormat? }`
+
 ### Thumbnail Builder (FLUX / Imagen)
 
-Image generation handled within the Media service pipeline (no dedicated public endpoint yet).
+Thumbnail grading lives on Scripting; scene frames use `/generate/scene` above.
 
 ### ElevenLabs Voice Synthesis
 
@@ -128,6 +138,7 @@ VO synthesis integrated in the render pipeline (ElevenLabs API).
 | `/api/v1/projects/:projectId/scripting/*` | `:8002` Scripting |
 | `/api/v1/projects/:projectId/thumbnails/*` | `:8002` Scripting |
 | `/api/v1/projects/:projectId/stock/*` | `:8003` Media |
+| `/api/v1/projects/:projectId/generate/*` | `:8003` Media |
 | `/api/v1/projects/:projectId/video/*` | `:8003` Media |
 | `/api/v1/projects/:projectId/seo/*` | `:8004` SEO |
 | `/api/v1/projects/:projectId/publish` | `:8004` SEO |
@@ -147,6 +158,7 @@ VO synthesis integrated in the render pipeline (ElevenLabs API).
 | 2 | POST | `/scripting/storyboard` | No |
 | 2 | POST | `/thumbnails/:assetId/grade` | No |
 | 3 | POST | `/stock/search` | No |
+| 3 | POST | `/generate/scene` | No (FLUX PuLID/Kontext when visual refs uploaded) |
 | 3 | POST | `/stock/videos` | No |
 | 3 | POST | `/video/render` | **Yes** (Celery) |
 | 3 | GET | `/video/render/:taskId/status` | — (poll) |

@@ -108,8 +108,8 @@ export default function VideoView({ onPush }: VideoViewProps) {
             <div
               className={`relative bg-black rounded-2xl overflow-hidden border border-studio-border/80 shadow-studio flex items-center justify-center flex-1 min-h-0 group ${
                 contentFormat === "short"
-                  ? "h-[50vh] aspect-[9/16]"
-                  : "w-full aspect-video max-h-[50vh]"
+                  ? "w-full max-w-[min(100%,18rem)] mx-auto aspect-[9/16] max-h-[45vh] sm:max-h-[50vh]"
+                  : "w-full aspect-video max-h-[40vh] sm:max-h-[50vh]"
               }`}
             >
               <video
@@ -120,7 +120,7 @@ export default function VideoView({ onPush }: VideoViewProps) {
               />
 
               {/* Overlay controls inside video frame on hover */}
-              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center gap-1.5">
+              <div className="absolute top-3 right-3 opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center gap-1.5">
                 <button
                   onClick={handleDownloadVideo}
                   title="Download final video"

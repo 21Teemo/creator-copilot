@@ -132,10 +132,10 @@ export default function SeoView({ onPublish }: SeoViewProps) {
   }
 
   return (
-    <div className="flex flex-col flex-1 h-full select-none">
-      <div className="flex items-center justify-between mb-4 shrink-0">
-        <div>
-          <h3 className="text-base font-bold text-studio-text-primary">
+    <div className="flex flex-col flex-1 min-h-0 select-none">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 shrink-0">
+        <div className="min-w-0">
+          <h3 className="text-sm sm:text-base font-bold text-studio-text-primary">
             SEO Optimization & Upload Studio
           </h3>
           <p className="text-xs text-studio-text-secondary">
@@ -144,17 +144,17 @@ export default function SeoView({ onPublish }: SeoViewProps) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 h-full">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain pr-1 -mr-1">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5 pb-2">
           {/* Left Column: Title selection & Description editor */}
-          <div className="flex flex-col bg-studio-surface border border-studio-border/60 rounded-2xl overflow-hidden h-full">
+          <div className="flex flex-col bg-studio-surface border border-studio-border/60 rounded-2xl overflow-hidden">
             <div className="px-4 py-3 bg-studio-border/20 border-b border-studio-border/40 flex items-center gap-2">
               <Sparkles size={14} className="text-accent" />
               <span className="text-xs font-bold text-studio-text-primary uppercase tracking-wider">
                 High-CTR Title Candidates
               </span>
             </div>
-            <div className="p-4 flex-1 overflow-y-auto space-y-4">
+            <div className="p-4 max-h-[min(70vh,720px)] overflow-y-auto overscroll-y-contain space-y-4">
               <div className="space-y-2">
                 {titles.map((title, idx) => (
                   <button
@@ -206,7 +206,7 @@ export default function SeoView({ onPublish }: SeoViewProps) {
           </div>
 
           {/* Right Column: Chapters, tags & publishing */}
-          <div className="flex flex-col bg-studio-surface border border-studio-border/60 rounded-2xl overflow-hidden h-full">
+          <div className="flex flex-col bg-studio-surface border border-studio-border/60 rounded-2xl overflow-hidden">
             <div className="px-4 py-3 bg-studio-border/20 border-b border-studio-border/40 flex items-center gap-2">
               <SquarePlay size={14} className="text-accent" />
               <span className="text-xs font-bold text-studio-text-primary uppercase tracking-wider">
@@ -214,7 +214,7 @@ export default function SeoView({ onPublish }: SeoViewProps) {
               </span>
             </div>
             
-            <div className="p-4 flex-1 overflow-y-auto space-y-4">
+            <div className="p-4 max-h-[min(70vh,720px)] overflow-y-auto overscroll-y-contain space-y-4">
               {/* Video Thumbnail Section */}
               <div className="space-y-2">
                 <span className="text-[10px] font-bold text-studio-text-secondary uppercase tracking-wider">

@@ -47,7 +47,7 @@ flowchart TB
 | **Article & Document Summarizer** | Condenses transcripts, articles, and research into a creator brief | `POST /research/summarize` |
 | **Brainstorming & Niche Trends** | Live YouTube trend scans for shorts and long-form in a niche | `POST /research/trends/short`, `POST /research/trends/long` |
 
-**Integrations:** `yt-dlp`, `youtube_transcript_api`, Gemini API (`GEMINI_API_KEY` in `services/research/.env`)
+**Integrations:** `yt-dlp`, `youtube_transcript_api`, DeepSeek API (`DEEPSEEK_API_KEY` in `services/.env`)
 
 **Output → Stage 2:** Niche insights, competitor analysis, summarized brief.
 

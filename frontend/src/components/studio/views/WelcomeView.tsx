@@ -55,7 +55,7 @@ export default function WelcomeView({ onSelectPrompt }: WelcomeViewProps) {
         ];
 
   return (
-    <div className="flex flex-col items-center justify-center flex-1 py-12 px-4 max-w-2xl mx-auto text-center h-full select-none">
+    <div className="flex flex-col items-center justify-center flex-1 py-8 sm:py-12 px-3 sm:px-4 max-w-2xl mx-auto text-center h-full select-none">
       <div className="relative mb-6">
         <div className="absolute inset-0 rounded-full bg-accent/20 blur-xl scale-150 animate-pulse" />
         <div className="relative flex items-center justify-center w-16 h-16 rounded-2xl bg-studio-surface border border-studio-border text-accent">
@@ -63,7 +63,7 @@ export default function WelcomeView({ onSelectPrompt }: WelcomeViewProps) {
         </div>
       </div>
 
-      <h2 className="text-2xl font-bold tracking-tight mb-2 text-studio-text-primary">
+      <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-2 text-studio-text-primary">
         Welcome to your Creative Studio
       </h2>
       <p className="text-sm text-studio-text-secondary mb-8 leading-relaxed">

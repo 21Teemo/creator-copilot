@@ -97,7 +97,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       explore_trends: "Scanning for trending topics in my niche...",
       fact_finder: "Performing fact-checking and compiling article briefs...",
       write_script: "Drafting script narration and storyboard outlines...",
-      scene_pictures: "Sourcing stock assets and generating thumbnails...",
+      scene_pictures: "Generating scene frames (FLUX identity lock when references are set)...",
       scene_videos: "Generating custom video clips for each scene...",
       ffmpeg_render: "Rendering final video compilation using FFmpeg render CLI...",
       seo_publish: "Optimizing metadata titles and chapter timestamps...",
