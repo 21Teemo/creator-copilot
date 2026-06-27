@@ -27,6 +27,7 @@ interface TrendsViewProps {
 
 export default function TrendsView({ projectId, onPush }: TrendsViewProps) {
   const trends = useResearchStore((state) => state.trends);
+  const setActiveTrend = useResearchStore((state) => state.setActiveTrend);
   const updateTrendExplanation = useResearchStore((state) => state.updateTrendExplanation);
   const updateTrendEngagement = useResearchStore((state) => state.updateTrendEngagement);
   const contentFormat = useProjectStore((state) => state.contentFormat);
@@ -346,7 +347,10 @@ export default function TrendsView({ projectId, onPush }: TrendsViewProps) {
                   </span>
                   {onPush && item.videoUrl && (
                     <button
-                      onClick={() => onPush(`Research and fact check trend: "${item.title}"`, "fact_finder")}
+                      onClick={() => {
+                        setActiveTrend(item);
+                        onPush(`Research and fact check trend: "${item.title}"`, "fact_finder");
+                      }}
                       className="text-accent hover:text-accent-hover font-bold flex items-center gap-0.5 cursor-pointer bg-accent/10 hover:bg-accent/20 px-2.5 py-1 rounded-lg border border-accent/25 transition-all text-[10px]"
                     >
                       Use Trend &rarr;

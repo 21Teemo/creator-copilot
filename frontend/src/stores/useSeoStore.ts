@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 export interface ChapterItem {
   timestamp: string;
@@ -28,9 +27,25 @@ interface SeoState {
   clearSeo: () => void;
 }
 
-export const useSeoStore = create<SeoState>()(
-  persist(
-    (set) => ({
+export const useSeoStore = create<SeoState>()((set) => ({
+  titles: [],
+  description: "",
+  tags: [],
+  chapters: [],
+  publishedUrl: null,
+  publishStatus: "idle",
+  thumbnailUrl: null,
+  thumbnailPrompt: "",
+  setTitles: (titles) => set({ titles }),
+  setDescription: (description) => set({ description }),
+  setTags: (tags) => set({ tags }),
+  setChapters: (chapters) => set({ chapters }),
+  setPublishedUrl: (publishedUrl) => set({ publishedUrl }),
+  setPublishStatus: (publishStatus) => set({ publishStatus }),
+  setThumbnailUrl: (thumbnailUrl) => set({ thumbnailUrl }),
+  setThumbnailPrompt: (thumbnailPrompt) => set({ thumbnailPrompt }),
+  clearSeo: () =>
+    set({
       titles: [],
       description: "",
       tags: [],
@@ -39,28 +54,5 @@ export const useSeoStore = create<SeoState>()(
       publishStatus: "idle",
       thumbnailUrl: null,
       thumbnailPrompt: "",
-      setTitles: (titles) => set({ titles }),
-      setDescription: (description) => set({ description }),
-      setTags: (tags) => set({ tags }),
-      setChapters: (chapters) => set({ chapters }),
-      setPublishedUrl: (publishedUrl) => set({ publishedUrl }),
-      setPublishStatus: (publishStatus) => set({ publishStatus }),
-      setThumbnailUrl: (thumbnailUrl) => set({ thumbnailUrl }),
-      setThumbnailPrompt: (thumbnailPrompt) => set({ thumbnailPrompt }),
-      clearSeo: () =>
-        set({
-          titles: [],
-          description: "",
-          tags: [],
-          chapters: [],
-          publishedUrl: null,
-          publishStatus: "idle",
-          thumbnailUrl: null,
-          thumbnailPrompt: "",
-        }),
     }),
-    {
-      name: "studio-seo-store",
-    }
-  )
-);
+}));

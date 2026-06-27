@@ -34,6 +34,15 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const [mounted, setMounted] = useState(false);
   
   useEffect(() => {
+    const legacyKeys = [
+      "studio-project-store",
+      "studio-shell-store",
+      "studio-research-store",
+      "studio-scripting-store",
+      "studio-media-store",
+      "studio-seo-store",
+    ];
+    legacyKeys.forEach((key) => localStorage.removeItem(key));
     setMounted(true);
   }, []);
 

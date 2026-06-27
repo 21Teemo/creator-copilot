@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 export interface EngagementSegment {
   start: number;
@@ -27,6 +26,7 @@ export interface TrendItem {
   subscriberGap?: number;
   viralityScore?: number;
   trendExplanation?: string;
+  visualAnalysis?: string;
   engagementSegments?: EngagementSegment[];
   heatmapAvailable?: boolean;
   engagementSource?: string;
@@ -41,13 +41,32 @@ export interface FactSource {
 export interface ResearchSummary {
   summaryText: string;
   sources: FactSource[];
+  visualAnalysis?: string;
+  thumbnailUrl?: string;
+}
+
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*\*(.+?)\*\*\*/g, "$1")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/_(.+?)_/g, "$1")
+    .replace(/^[-*_]{3,}\s*$/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 interface ResearchState {
   trends: TrendItem[];
   summaries: ResearchSummary | null;
+  activeTrend: TrendItem | null;
   setTrends: (trends: TrendItem[]) => void;
   setSummaries: (summaries: ResearchSummary | null) => void;
+  setActiveTrend: (trend: TrendItem | null) => void;
   updateSummaryText: (text: string) => void;
   updateTrendExplanation: (videoUrl: string, explanation: string) => void;
   updateTrendEngagement: (
@@ -59,42 +78,42 @@ interface ResearchState {
   clearResearch: () => void;
 }
 
-export const useResearchStore = create<ResearchState>()(
-  persist(
-    (set) => ({
-      trends: [],
-      summaries: null,
-      setTrends: (trends) => set({ trends }),
-      setSummaries: (summaries) => set({ summaries }),
-      updateSummaryText: (text) =>
-        set((state) => ({
-          summaries: state.summaries
-            ? { ...state.summaries, summaryText: text }
-            : null,
-        })),
-      updateTrendExplanation: (videoUrl, explanation) =>
-        set((state) => ({
-          trends: state.trends.map((trend) =>
-            trend.videoUrl === videoUrl ? { ...trend, trendExplanation: explanation } : trend
-          ),
-        })),
-      updateTrendEngagement: (videoUrl, segments, heatmapAvailable, engagementSource) =>
-        set((state) => ({
-          trends: state.trends.map((trend) =>
-            trend.videoUrl === videoUrl
-              ? {
-                  ...trend,
-                  engagementSegments: segments,
-                  heatmapAvailable,
-                  engagementSource,
-                }
-              : trend
-          ),
-        })),
-      clearResearch: () => set({ trends: [], summaries: null }),
+export const useResearchStore = create<ResearchState>()((set) => ({
+  trends: [],
+  summaries: null,
+  activeTrend: null,
+  setTrends: (trends) => set({ trends }),
+  setSummaries: (summaries) =>
+    set({
+      summaries: summaries
+        ? { ...summaries, summaryText: stripMarkdown(summaries.summaryText) }
+        : null,
     }),
-    {
-      name: "studio-research-store",
-    }
-  )
-);
+  setActiveTrend: (trend) => set({ activeTrend: trend }),
+  updateSummaryText: (text) =>
+    set((state) => ({
+      summaries: state.summaries
+        ? { ...state.summaries, summaryText: text }
+        : null,
+    })),
+  updateTrendExplanation: (videoUrl, explanation) =>
+    set((state) => ({
+      trends: state.trends.map((trend) =>
+        trend.videoUrl === videoUrl ? { ...trend, trendExplanation: explanation } : trend
+      ),
+    })),
+  updateTrendEngagement: (videoUrl, segments, heatmapAvailable, engagementSource) =>
+    set((state) => ({
+      trends: state.trends.map((trend) =>
+        trend.videoUrl === videoUrl
+          ? {
+              ...trend,
+              engagementSegments: segments,
+              heatmapAvailable,
+              engagementSource,
+            }
+          : trend
+      ),
+    })),
+  clearResearch: () => set({ trends: [], summaries: null, activeTrend: null }),
+}));

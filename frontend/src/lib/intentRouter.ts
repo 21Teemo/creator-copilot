@@ -1,12 +1,102 @@
 import { useProjectStore, ContentFormat } from "../stores/useProjectStore";
 import { useStudioStore, StudioView } from "../stores/useStudioStore";
-import { useResearchStore } from "../stores/useResearchStore";
+import { useResearchStore, type TrendItem } from "../stores/useResearchStore";
 import { useScriptingStore } from "../stores/useScriptingStore";
 import { useMediaStore } from "../stores/useMediaStore";
 import { useSeoStore } from "../stores/useSeoStore";
 import { apiRequest } from "./api";
 import { ActionChipType } from "./quickControls";
 export type { ActionChipType };
+
+function formatTrendContext(trend: TrendItem): string {
+  const lines = [
+    `Title: ${trend.title}`,
+    trend.channelName && `Channel: ${trend.channelName}`,
+    trend.views && `Views: ${trend.views}`,
+    trend.duration && `Duration: ${trend.duration}`,
+    trend.description && `Description: ${trend.description}`,
+    trend.videoUrl && `Video URL: ${trend.videoUrl}`,
+    trend.trendExplanation && `Why it's trending:\n${trend.trendExplanation}`,
+    trend.visualAnalysis && `Visual style analysis (from thumbnail):\n${trend.visualAnalysis}`,
+  ].filter(Boolean);
+  return lines.join("\n");
+}
+
+async function ensureTrendVisualAnalysis(
+  projectId: string,
+  trend: TrendItem
+): Promise<TrendItem> {
+  if (!trend.thumbnailUrl || trend.visualAnalysis) return trend;
+  try {
+    const res = await apiRequest(projectId, "/research/trends/visual-analyze", "POST", {
+      thumbnailUrl: trend.thumbnailUrl,
+      title: trend.title,
+      description: trend.description,
+    });
+    if (res.analysis) {
+      const enriched = { ...trend, visualAnalysis: res.analysis };
+      useResearchStore.getState().setActiveTrend(enriched);
+      return enriched;
+    }
+  } catch (err) {
+    console.warn("Trend thumbnail analysis failed:", err);
+  }
+  return trend;
+}
+
+function buildFactFinderPrompt(userPrompt: string, trendOverride?: TrendItem | null): string {
+  const { activeTrend, trends } = useResearchStore.getState();
+  const trend =
+    trendOverride ??
+    activeTrend ??
+    trends.find((t) => userPrompt.includes(t.title) || (t.videoUrl && userPrompt.includes(t.videoUrl)));
+
+  if (!trend) return userPrompt;
+
+  const parts = [
+    "Research and fact-check this trending video. Build a creator brief grounded in the video and real facts.",
+    formatTrendContext(trend),
+  ];
+  if (userPrompt.trim() && !userPrompt.includes(trend.title) && trend.videoUrl !== userPrompt.trim()) {
+    parts.push(`Additional instructions: ${userPrompt}`);
+  }
+  return parts.join("\n\n");
+}
+
+function buildScriptPrompt(userPrompt: string): string {
+  const { summaries, activeTrend } = useResearchStore.getState();
+  const parts: string[] = [];
+
+  if (activeTrend) {
+    parts.push("=== TRENDING VIDEO ===");
+    parts.push(formatTrendContext(activeTrend));
+  }
+
+  if (summaries?.summaryText?.trim()) {
+    parts.push("=== RESEARCH BRIEF (required source material — stay on this topic) ===");
+    parts.push(summaries.summaryText);
+    if (summaries.visualAnalysis) {
+      parts.push("=== VISUAL FORMAT (from thumbnail — match in storyboard scenes) ===");
+      parts.push(summaries.visualAnalysis);
+    }
+    if (summaries.sources.length > 0) {
+      parts.push(
+        "Citations:\n" +
+          summaries.sources.map((s, i) => `[${i + 1}] ${s.title} – ${s.url}`).join("\n")
+      );
+    }
+  }
+
+  const instruction =
+    userPrompt.trim() && !userPrompt.startsWith("Drafting script")
+      ? userPrompt
+      : "Write a voiceover script and storyboard outline strictly based on the research brief above. Use only facts and angles from the brief — do not invent an unrelated topic.";
+
+  parts.push("=== INSTRUCTIONS ===");
+  parts.push(instruction);
+
+  return parts.join("\n\n");
+}
 
 export type StudioAction = ActionChipType | "refine";
 
@@ -150,7 +240,7 @@ export async function dispatchStudioAction(
       } else if (currentView === "facts") {
         const researchStore = useResearchStore.getState();
         const res = await apiRequest(projectId, "/research/summarize", "POST", {
-          prompt: `Refine summary brief. Instructions: ${prompt}`,
+          prompt: `Refine this research brief. Instructions: ${prompt}\n\nCurrent brief:\n${researchStore.summaries?.summaryText ?? ""}`,
         });
         researchStore.setSummaries(res);
         projectStore.setLastGeneratedFormat(currentFormat);
@@ -200,14 +290,39 @@ export async function dispatchStudioAction(
       }
       case "fact_finder": {
         studioStore.setActiveView("facts");
-        const brief = await apiRequest(projectId, "/research/summarize", "POST", { prompt });
-        useResearchStore.getState().setSummaries(brief);
+        const researchState = useResearchStore.getState();
+        let trend =
+          researchState.activeTrend ??
+          researchState.trends.find(
+            (t) => prompt.includes(t.title) || (t.videoUrl && prompt.includes(t.videoUrl))
+          );
+        if (trend?.thumbnailUrl) {
+          trend = await ensureTrendVisualAnalysis(projectId, trend);
+        }
+        const factPrompt = buildFactFinderPrompt(prompt, trend);
+        const brief = await apiRequest(projectId, "/research/summarize", "POST", {
+          prompt: factPrompt,
+          thumbnailUrl: trend?.thumbnailUrl,
+          videoTitle: trend?.title,
+          videoDescription: trend?.description,
+          visualAnalysis: trend?.visualAnalysis,
+        });
+        useResearchStore.getState().setSummaries({
+          ...brief,
+          thumbnailUrl: trend?.thumbnailUrl,
+          visualAnalysis: brief.visualAnalysis || trend?.visualAnalysis,
+        });
         projectStore.setLastGeneratedFormat(currentFormat);
         break;
       }
       case "write_script": {
         studioStore.setActiveView("script");
-        const res = await apiRequest(projectId, "/scripting/storyboard", "POST", { prompt });
+        const activeTrend = useResearchStore.getState().activeTrend;
+        if (activeTrend?.thumbnailUrl && !activeTrend.visualAnalysis) {
+          await ensureTrendVisualAnalysis(projectId, activeTrend);
+        }
+        const scriptPrompt = buildScriptPrompt(prompt);
+        const res = await apiRequest(projectId, "/scripting/storyboard", "POST", { prompt: scriptPrompt });
         useScriptingStore.getState().setScript(res.script);
         useScriptingStore.getState().setOutline(res.outline || []);
         useScriptingStore.getState().setStoryboard(res.storyboard || []);

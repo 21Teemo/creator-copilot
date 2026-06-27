@@ -70,7 +70,13 @@ def generate_storyboard(prompt: str, content_format: str = "long") -> dict:
         
         response = model.generate_content(
             f"You are a professional video producer. {format_instruction}, generate a full storyboard, outline, "
-            f"and narration script based on the following context/brief:\n\n{prompt}",
+            f"and narration script.\n\n"
+            f"CRITICAL: Base the script ONLY on the research brief and trending video context below. "
+            f"Do not invent a different topic, fictional story, or unrelated narrative. "
+            f"Every scene and talking point must reflect the provided facts and angles. "
+            f"If visual style analysis is provided, match that format in storyboard visual prompts "
+            f"(e.g. text-message UI, POV framing, color palette).\n\n"
+            f"Context/brief:\n{prompt}",
             generation_config={"response_mime_type": "application/json", "response_schema": StoryboardOutput}
         )
         return json.loads(response.text)

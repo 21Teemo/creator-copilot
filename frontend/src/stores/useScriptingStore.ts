@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 export interface OutlineItem {
   sectionTitle: string;
@@ -165,124 +164,123 @@ interface ScriptingState {
   thumbnailConcepts: ThumbnailConcept[];
   selectedStyle: string;
   setScript: (script: string) => void;
+  updateScript: (script: string) => void;
   setOutline: (outline: OutlineItem[]) => void;
   setStoryboard: (storyboard: StoryboardScene[]) => void;
+  updateStoryboardScene: (
+    sceneNumber: number,
+    updates: Partial<Pick<StoryboardScene, "visualPrompt" | "narrationText">>
+  ) => void;
   setThumbnailConcepts: (concepts: ThumbnailConcept[]) => void;
   updateThumbnailConceptGrade: (id: string, ctrScore: number, feedback: string) => void;
   setSelectedStyle: (styleId: string) => void;
   clearScripting: () => void;
 }
 
-export const useScriptingStore = create<ScriptingState>()(
-  persist(
-    (set) => ({
+export const useScriptingStore = create<ScriptingState>()((set) => ({
+  script: "",
+  outline: [],
+  storyboard: [],
+  thumbnailConcepts: [],
+  selectedStyle: "default",
+  setScript: (script) => {
+    set((state) => {
+      const sceneRegex = /\[Scene\s+(\d+)\s*-\s*Visual:\s*([\s\S]*?)\]/gi;
+      const storyboard: StoryboardScene[] = [];
+      let match;
+      const matches: { index: number; sceneNumber: number; visualPrompt: string }[] = [];
+
+      while ((match = sceneRegex.exec(script)) !== null) {
+        matches.push({
+          index: match.index,
+          sceneNumber: parseInt(match[1], 10),
+          visualPrompt: match[2].trim(),
+        });
+      }
+
+      if (matches.length === 0) {
+        return { script };
+      }
+
+      for (let i = 0; i < matches.length; i++) {
+        const current = matches[i];
+        const nextIndex = i + 1 < matches.length ? matches[i + 1].index : script.length;
+        const startOfNarration = current.index + script.substring(current.index).indexOf("]") + 1;
+        const blockText = script.substring(startOfNarration, nextIndex).trim();
+
+        let narrationText = "";
+        const voiceoverMatch = blockText.match(/Voiceover:\s*([\s\S]*)/i);
+        if (voiceoverMatch) {
+          narrationText = voiceoverMatch[1].trim();
+        } else {
+          narrationText = blockText.trim();
+        }
+
+        let cleanPrompt = current.visualPrompt;
+        for (const style of VISUAL_STYLES) {
+          if (style.promptSnippet && cleanPrompt.startsWith(style.promptSnippet + ", ")) {
+            cleanPrompt = cleanPrompt.substring(style.promptSnippet.length + 2);
+            break;
+          }
+        }
+
+        const currentStyle = VISUAL_STYLES.find((s) => s.id === state.selectedStyle);
+        const finalPrompt =
+          currentStyle && currentStyle.promptSnippet
+            ? `${currentStyle.promptSnippet}, ${cleanPrompt}`
+            : cleanPrompt;
+
+        storyboard.push({
+          sceneNumber: current.sceneNumber,
+          visualPrompt: finalPrompt,
+          narrationText,
+        });
+      }
+
+      return { script, storyboard };
+    });
+  },
+  updateScript: (script) => set({ script }),
+  setOutline: (outline) => set({ outline }),
+  setStoryboard: (storyboard) => set({ storyboard }),
+  updateStoryboardScene: (sceneNumber, updates) =>
+    set((state) => ({
+      storyboard: state.storyboard.map((scene) =>
+        scene.sceneNumber === sceneNumber ? { ...scene, ...updates } : scene
+      ),
+    })),
+  setThumbnailConcepts: (thumbnailConcepts) => set({ thumbnailConcepts }),
+  updateThumbnailConceptGrade: (id, ctrScore, feedback) =>
+    set((state) => ({
+      thumbnailConcepts: state.thumbnailConcepts.map((concept) =>
+        concept.id === id ? { ...concept, ctrScore, feedback } : concept
+      ),
+    })),
+  setSelectedStyle: (styleId) => {
+    set((state) => {
+      const newStyle = VISUAL_STYLES.find((s) => s.id === styleId);
+      const newPrefix = newStyle && newStyle.promptSnippet ? `${newStyle.promptSnippet}, ` : "";
+
+      const updatedStoryboard = state.storyboard.map((scene) => {
+        let cleanPrompt = scene.visualPrompt;
+        for (const style of VISUAL_STYLES) {
+          if (style.promptSnippet && cleanPrompt.startsWith(style.promptSnippet + ", ")) {
+            cleanPrompt = cleanPrompt.substring(style.promptSnippet.length + 2);
+            break;
+          }
+        }
+        return { ...scene, visualPrompt: newPrefix + cleanPrompt };
+      });
+
+      return { selectedStyle: styleId, storyboard: updatedStoryboard };
+    });
+  },
+  clearScripting: () =>
+    set({
       script: "",
       outline: [],
       storyboard: [],
       thumbnailConcepts: [],
       selectedStyle: "default",
-      setScript: (script) => {
-        set((state) => {
-          const sceneRegex = /\[Scene\s+(\d+)\s*-\s*Visual:\s*([\s\S]*?)\]/gi;
-          const storyboard: StoryboardScene[] = [];
-          let match;
-          const matches: { index: number; sceneNumber: number; visualPrompt: string }[] = [];
-          
-          while ((match = sceneRegex.exec(script)) !== null) {
-            matches.push({
-              index: match.index,
-              sceneNumber: parseInt(match[1], 10),
-              visualPrompt: match[2].trim(),
-            });
-          }
-
-          for (let i = 0; i < matches.length; i++) {
-            const current = matches[i];
-            const nextIndex = i + 1 < matches.length ? matches[i + 1].index : script.length;
-            const startOfNarration = current.index + script.substring(current.index).indexOf("]") + 1;
-            const blockText = script.substring(startOfNarration, nextIndex).trim();
-            
-            let narrationText = "";
-            const voiceoverMatch = blockText.match(/Voiceover:\s*([\s\S]*)/i);
-            if (voiceoverMatch) {
-              narrationText = voiceoverMatch[1].trim();
-            } else {
-              narrationText = blockText.trim();
-            }
-
-            let cleanPrompt = current.visualPrompt;
-            for (const style of VISUAL_STYLES) {
-              if (style.promptSnippet && cleanPrompt.startsWith(style.promptSnippet + ", ")) {
-                cleanPrompt = cleanPrompt.substring(style.promptSnippet.length + 2);
-                break;
-              }
-            }
-
-            const currentStyle = VISUAL_STYLES.find(s => s.id === state.selectedStyle);
-            const finalPrompt = currentStyle && currentStyle.promptSnippet
-              ? `${currentStyle.promptSnippet}, ${cleanPrompt}`
-              : cleanPrompt;
-
-            storyboard.push({
-              sceneNumber: current.sceneNumber,
-              visualPrompt: finalPrompt,
-              narrationText,
-            });
-          }
-
-          return {
-            script,
-            storyboard,
-          };
-        });
-      },
-      setOutline: (outline) => set({ outline }),
-      setStoryboard: (storyboard) => set({ storyboard }),
-      setThumbnailConcepts: (thumbnailConcepts) => set({ thumbnailConcepts }),
-      updateThumbnailConceptGrade: (id, ctrScore, feedback) =>
-        set((state) => ({
-          thumbnailConcepts: state.thumbnailConcepts.map((concept) =>
-            concept.id === id ? { ...concept, ctrScore, feedback } : concept
-          ),
-        })),
-      setSelectedStyle: (styleId) => {
-        set((state) => {
-          const newStyle = VISUAL_STYLES.find(s => s.id === styleId);
-          const newPrefix = newStyle && newStyle.promptSnippet ? `${newStyle.promptSnippet}, ` : "";
-
-          // Rewrite storyboard state (do NOT mutate narration script text)
-          const updatedStoryboard = state.storyboard.map((scene) => {
-            let cleanPrompt = scene.visualPrompt;
-            for (const style of VISUAL_STYLES) {
-              if (style.promptSnippet && cleanPrompt.startsWith(style.promptSnippet + ", ")) {
-                cleanPrompt = cleanPrompt.substring(style.promptSnippet.length + 2);
-                break;
-              }
-            }
-            const newPrompt = newPrefix + cleanPrompt;
-            return {
-              ...scene,
-              visualPrompt: newPrompt
-            };
-          });
-
-          return {
-            selectedStyle: styleId,
-            storyboard: updatedStoryboard
-          };
-        });
-      },
-      clearScripting: () =>
-        set({
-          script: "",
-          outline: [],
-          storyboard: [],
-          thumbnailConcepts: [],
-          selectedStyle: "default",
-        }),
     }),
-    {
-      name: "studio-scripting-store",
-    }
-  )
-);
+}));

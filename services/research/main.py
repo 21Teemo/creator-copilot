@@ -8,7 +8,7 @@ from research.services.short import fetch_short_trends
 from research.services.long import fetch_long_trends
 from research.services.common import fetch_youtube_transcript, fetch_trend_explanation_lazy
 from research.services.heatmap import fetch_engagement_segments_lazy
-from research.services.gemini import perform_web_search, perform_summarization
+from research.services.gemini import perform_web_search, perform_summarization, analyze_trend_thumbnail
 
 app = FastAPI(title="Creator Copilot - Research Service", version="0.1.0")
 
@@ -28,6 +28,10 @@ class ResearchRequest(BasePayload):
     prompt: str
     minViews: Optional[int] = None
     sortBy: Optional[str] = "breakout"
+    thumbnailUrl: Optional[str] = None
+    videoTitle: Optional[str] = None
+    videoDescription: Optional[str] = None
+    visualAnalysis: Optional[str] = None
 
 class TrendItem(BaseModel):
     title: str
@@ -56,6 +60,7 @@ class WebSearchResponse(BaseModel):
 class SummarizeResponse(BaseModel):
     summaryText: str
     sources: List[dict]
+    visualAnalysis: Optional[str] = None
 
 class TrendExplainRequest(BaseModel):
     title: str
@@ -85,6 +90,14 @@ class TrendEngagementResponse(BaseModel):
     heatmapAvailable: bool
     source: str
     segments: List[EngagementSegment]
+
+class TrendVisualAnalyzeRequest(BaseModel):
+    thumbnailUrl: str
+    title: Optional[str] = ""
+    description: Optional[str] = ""
+
+class TrendVisualAnalyzeResponse(BaseModel):
+    analysis: str
 
 router = APIRouter(prefix="/api/v1/projects/{projectId}/research")
 
@@ -141,6 +154,17 @@ async def trend_engagement(projectId: str, payload: TrendEngagementRequest):
     )
     return result
 
+@router.post("/trends/visual-analyze", response_model=TrendVisualAnalyzeResponse)
+async def analyze_trend_visual(projectId: str, payload: TrendVisualAnalyzeRequest):
+    if not payload.thumbnailUrl:
+        raise HTTPException(status_code=400, detail="thumbnailUrl is required")
+    analysis = analyze_trend_thumbnail(
+        payload.thumbnailUrl,
+        payload.title or "",
+        payload.description or "",
+    )
+    return {"analysis": analysis}
+
 @router.post("/web-search", response_model=WebSearchResponse)
 async def web_search(projectId: str, payload: ResearchRequest):
     query = payload.prompt
@@ -161,16 +185,43 @@ async def web_search(projectId: str, payload: ResearchRequest):
 
 @router.post("/summarize", response_model=SummarizeResponse)
 async def summarize(projectId: str, payload: ResearchRequest):
-    query = payload.prompt
-    if "youtube.com/" in query or "youtu.be/" in query:
-        transcript = fetch_youtube_transcript(query)
-        content_to_summarize = f"Video URL: {query}\nTranscript:\n{transcript}"
-        results = perform_summarization(content_to_summarize)
-        results["sources"] = [{"title": "YouTube Video Source", "url": query}]
+    try:
+        visual_analysis = (payload.visualAnalysis or "").strip()
+        if payload.thumbnailUrl and not visual_analysis:
+            visual_analysis = analyze_trend_thumbnail(
+                payload.thumbnailUrl,
+                payload.videoTitle or "",
+                payload.videoDescription or "",
+            ).strip()
+
+        query = payload.prompt
+        if "youtube.com/" in query or "youtu.be/" in query:
+            transcript = fetch_youtube_transcript(query)
+            content_to_summarize = f"Video URL: {query}\nTranscript:\n{transcript}"
+            if visual_analysis:
+                content_to_summarize += (
+                    "\n\n=== VISUAL STYLE ANALYSIS (from thumbnail — replicate this format) ===\n"
+                    + visual_analysis
+                )
+            results = perform_summarization(content_to_summarize, visual_analysis=visual_analysis)
+            results["sources"] = [{"title": "YouTube Video Source", "url": query}]
+            if visual_analysis:
+                results["visualAnalysis"] = visual_analysis
+            return results
+
+        if visual_analysis:
+            query += (
+                "\n\n=== VISUAL STYLE ANALYSIS (from thumbnail — replicate this format) ===\n"
+                + visual_analysis
+            )
+
+        results = perform_summarization(query, visual_analysis=visual_analysis)
+        if visual_analysis:
+            results["visualAnalysis"] = visual_analysis
         return results
-        
-    results = perform_summarization(query)
-    return results
+    except Exception as e:
+        print(f"[summarize] Unhandled error: {e}")
+        raise HTTPException(status_code=500, detail=f"Summarize failed: {e}")
 
 app.include_router(router)
 

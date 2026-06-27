@@ -70,10 +70,17 @@ export async function apiRequest(projectId: string, path: string, method = "POST
 
   if (!response.ok) {
     const errText = await response.text();
-    const hint =
-      response.status === 500 && !errText
-        ? "Backend service unavailable — run ./dev.sh or start research on port 8001."
-        : errText || response.statusText;
+    const backendUnavailable =
+      response.status === 502 ||
+      response.status === 503 ||
+      (response.status === 500 &&
+        (!errText ||
+          errText === "Internal Server Error" ||
+          errText.includes("ECONNREFUSED") ||
+          errText.includes("connect ECONNREFUSED")));
+    const hint = backendUnavailable
+      ? "Backend service unavailable — run ./dev.sh from the repo root (research on port 8001)."
+      : errText || response.statusText;
     throw new Error(`API Error [${response.status}]: ${hint}`);
   }
 
