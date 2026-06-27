@@ -139,23 +139,40 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
   };
 
   const aiConsistencyEnabled = shouldUseAiSceneGeneration();
+  const hasUploadedRefs = visualReferences.some((r) => r.imageUrl?.trim());
 
   if (sceneImages.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center flex-1 text-center py-12">
-        <ImageIcon size={40} className="text-studio-text-secondary mb-4" />
-        <p className="text-sm text-studio-text-primary font-bold mb-1">No storyboard scenes generated yet</p>
-          <p className="text-xs text-studio-text-secondary max-w-sm">
-            Click the "Scene Pictures" control below or use the prompt bar to generate storyboard frames
-            {visualReferences.some((r) => r.imageUrl) ? " with FLUX identity lock from your visual references." : " from stock libraries."}
+      <div className="flex flex-col flex-1 min-h-0 text-center py-8 px-2">
+        <div className="flex flex-col items-center justify-center shrink-0 py-4">
+          <ImageIcon size={40} className="text-studio-text-secondary mb-4" />
+          <p className="text-sm text-studio-text-primary font-bold mb-1">No storyboard scenes generated yet</p>
+          <p className="text-xs text-studio-text-secondary max-w-sm mb-4">
+            Run <strong className="text-studio-text-primary">Write Script</strong> first, then hit{" "}
+            <strong className="text-studio-text-primary">Scene Pictures</strong> to source frames from stock
+            {visualReferences.some((r) => r.imageUrl)
+              ? " or FLUX (references uploaded)."
+              : ". Reference uploads are optional."}
           </p>
+          {onPush && (
+            <button
+              type="button"
+              onClick={() => onPush("Generate storyboard keyframe scene pictures for the script.", "scene_pictures")}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent hover:bg-accent/90 text-xs font-bold text-white transition-all cursor-pointer shadow-md"
+            >
+              Generate Scene Pictures
+            </button>
+          )}
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain text-left">
+          <VisualReferencesPanel collapsible defaultOpen={false} />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col flex-1 h-full select-none min-h-0">
-      <VisualReferencesPanel />
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 shrink-0">
         <div>
           <h3 className="text-base font-bold text-studio-text-primary flex items-center gap-2">
@@ -359,6 +376,8 @@ export default function SceneGalleryView({ onPush }: SceneGalleryViewProps) {
             </div>
           )}
         </div>
+
+        <VisualReferencesPanel collapsible defaultOpen={hasUploadedRefs} />
       </div>
 
       {onPush && (

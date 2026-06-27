@@ -65,12 +65,24 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-/** Upload reference images + labels — locked into all scene image prompts */
-export function VisualReferencesPanel() {
+/** Upload reference images + labels — optional; enables FLUX identity lock when images are set */
+export function VisualReferencesPanel({
+  collapsible = false,
+  defaultOpen = true,
+}: {
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+} = {}) {
   const projectId = useParams()?.projectId as string;
   const { visualReferences, addVisualReference, updateVisualReference, removeVisualReference } =
     useMediaStore();
   const [uploading, setUploading] = useState<VisualReferenceCategory | null>(null);
+  const hasUploadedRefs = visualReferences.some((r) => r.imageUrl?.trim());
+  const [isOpen, setIsOpen] = useState(defaultOpen || hasUploadedRefs);
+
+  useEffect(() => {
+    if (hasUploadedRefs) setIsOpen(true);
+  }, [hasUploadedRefs]);
 
   const handleUpload = async (category: VisualReferenceCategory, file: File) => {
     if (!projectId) return;
@@ -95,12 +107,26 @@ export function VisualReferencesPanel() {
 
   return (
     <div className="mb-4 shrink-0 bg-studio-surface border border-studio-border/60 p-3.5 rounded-2xl">
-      <h4 className="text-[10px] font-bold text-studio-text-secondary uppercase tracking-wider mb-1 flex items-center gap-1">
-        <Eye size={11} className="text-accent" />
-        Visual References
-      </h4>
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <h4 className="text-[10px] font-bold text-studio-text-secondary uppercase tracking-wider flex items-center gap-1 flex-wrap">
+          <Eye size={11} className="text-accent" />
+          Visual References
+          <span className="normal-case font-semibold text-studio-text-secondary/80">(optional)</span>
+        </h4>
+        {collapsible && (
+          <button
+            type="button"
+            onClick={() => setIsOpen((v) => !v)}
+            className="text-[10px] font-semibold text-accent hover:text-accent/80 shrink-0 cursor-pointer"
+          >
+            {isOpen ? "Hide" : hasUploadedRefs ? "Show" : "Add for FLUX lock"}
+          </button>
+        )}
+      </div>
+      {(!collapsible || isOpen) && (
+        <>
       <p className="text-[10px] text-studio-text-secondary mb-3 leading-relaxed">
-        Upload reference images and describe each element. Character refs use FLUX PuLID; environment/gadget refs use Kontext img2img across all scenes.
+        Skip this to use stock search. Upload images only if you want FLUX PuLID/Kontext identity lock across scenes.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {REF_CATEGORIES.map((cat) => {
@@ -159,6 +185,8 @@ export function VisualReferencesPanel() {
           );
         })}
       </div>
+        </>
+      )}
     </div>
   );
 }
@@ -238,7 +266,7 @@ export default function ScriptView({ onPush }: ScriptViewProps) {
           )}
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain pr-1 -mr-1 text-left">
-          <VisualReferencesPanel />
+          <VisualReferencesPanel collapsible defaultOpen={false} />
         </div>
       </div>
     );
@@ -445,7 +473,7 @@ export default function ScriptView({ onPush }: ScriptViewProps) {
           <div className="order-2">{voiceoverBlock}</div>
         </div>
 
-        <VisualReferencesPanel />
+        <VisualReferencesPanel collapsible defaultOpen={false} />
 
         {/* Visual Style Presets Panel */}
         <div className="shrink-0 bg-studio-surface border border-studio-border/60 p-3.5 rounded-2xl">
