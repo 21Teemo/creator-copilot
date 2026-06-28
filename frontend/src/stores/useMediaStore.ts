@@ -31,6 +31,9 @@ interface MediaState {
   taskId: string | null;
   renderStatus: RenderStatus;
   renderProgress: number;
+  renderStep: string | null;
+  renderElapsedSec: number | null;
+  renderError: string | null;
   setSceneImages: (images: SceneImage[]) => void;
   setSceneVideos: (videos: SceneVideo[]) => void;
   addVisualReference: (ref: Omit<VisualReference, "id">) => void;
@@ -40,6 +43,9 @@ interface MediaState {
   setTaskId: (taskId: string | null) => void;
   setRenderStatus: (status: RenderStatus) => void;
   setRenderProgress: (progress: number) => void;
+  setRenderStep: (step: string | null) => void;
+  setRenderElapsedSec: (seconds: number | null) => void;
+  setRenderError: (error: string | null) => void;
   clearMedia: () => void;
 }
 
@@ -51,6 +57,9 @@ export const useMediaStore = create<MediaState>()((set) => ({
   taskId: null,
   renderStatus: "idle",
   renderProgress: 0,
+  renderStep: null,
+  renderElapsedSec: null,
+  renderError: null,
   setSceneImages: (sceneImages) => set({ sceneImages }),
   setSceneVideos: (sceneVideos) => set({ sceneVideos }),
   addVisualReference: (ref) =>
@@ -72,6 +81,9 @@ export const useMediaStore = create<MediaState>()((set) => ({
   setTaskId: (taskId) => set({ taskId }),
   setRenderStatus: (renderStatus) => set({ renderStatus }),
   setRenderProgress: (renderProgress) => set({ renderProgress }),
+  setRenderStep: (renderStep) => set({ renderStep }),
+  setRenderElapsedSec: (renderElapsedSec) => set({ renderElapsedSec }),
+  setRenderError: (renderError) => set({ renderError }),
   clearMedia: () =>
     set({
       sceneImages: [],
@@ -80,5 +92,8 @@ export const useMediaStore = create<MediaState>()((set) => ({
       taskId: null,
       renderStatus: "idle",
       renderProgress: 0,
+      renderStep: null,
+      renderElapsedSec: null,
+      renderError: null,
     }),
 }));

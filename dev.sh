@@ -16,6 +16,7 @@ start_service() {
   local module="$3"
   local pidfile="$PID_DIR/${name}.pid"
   local logfile="/tmp/cc-${name}.log"
+  local screen_name="cc-${name}"
 
   local existing
   existing=$(lsof -t -i :"$port" 2>/dev/null || true)
@@ -25,10 +26,17 @@ start_service() {
     return 0
   fi
 
-  nohup python -m uvicorn "$module" --host 127.0.0.1 --port "$port" >> "$logfile" 2>&1 &
-  local pid=$!
-  echo "$pid" > "$pidfile"
-  echo "-> ${name} started on port ${port} (pid ${pid}, log: ${logfile})"
+  # Detached screen survives terminal/agent session exit (nohup alone often does not).
+  screen -S "$screen_name" -X quit 2>/dev/null || true
+  screen -dmS "$screen_name" bash -c "cd '$SERVICES_DIR' && source venv/bin/activate && exec python -m uvicorn '$module' --host 127.0.0.1 --port '$port' >> '$logfile' 2>&1"
+  sleep 1
+  existing=$(lsof -t -i :"$port" 2>/dev/null || true)
+  if [ -n "$existing" ]; then
+    echo "$existing" > "$pidfile"
+    echo "-> ${name} started on port ${port} (screen:${screen_name}, pid ${existing}, log: ${logfile})"
+  else
+    echo "-> WARNING: ${name} failed to bind port ${port} — check ${logfile}"
+  fi
 }
 
 start_frontend() {
@@ -184,9 +192,16 @@ start_service "media" 8003 "media.main:app"
 start_service "seo" 8004 "seo.main:app"
 
 if [ ! -f "$PID_DIR/celery.pid" ] || ! kill -0 "$(cat "$PID_DIR/celery.pid")" 2>/dev/null; then
-  nohup python -m video-worker.worker >> /tmp/cc-celery-worker.log 2>&1 &
-  echo $! > "$PID_DIR/celery.pid"
-  echo "-> Celery worker started (pid $(cat "$PID_DIR/celery.pid"), log: /tmp/cc-celery-worker.log)"
+  screen -S cc-celery -X quit 2>/dev/null || true
+  screen -dmS cc-celery bash -c "cd '$SERVICES_DIR' && source venv/bin/activate && exec python -m video-worker.worker >> /tmp/cc-celery-worker.log 2>&1"
+  sleep 1
+  celery_pid=$(pgrep -f 'video-worker.worker' | head -1 || true)
+  if [ -n "$celery_pid" ]; then
+    echo "$celery_pid" > "$PID_DIR/celery.pid"
+    echo "-> Celery worker started (screen:cc-celery, pid ${celery_pid}, log: /tmp/cc-celery-worker.log)"
+  else
+    echo "-> WARNING: Celery worker failed to start — check /tmp/cc-celery-worker.log"
+  fi
 else
   echo "-> Celery worker already running (pid $(cat "$PID_DIR/celery.pid"))"
 fi
