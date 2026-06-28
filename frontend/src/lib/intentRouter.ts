@@ -244,6 +244,18 @@ export async function searchStockVideosForPrompt(
   })).filter((item) => item.url);
 }
 
+function stockSearchErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  if (/Backend service unavailable|ECONNREFUSED|Internal Server Error/i.test(raw)) {
+    return "Media service unavailable (port 8003). Run ./dev.sh start from the repo root.";
+  }
+  if (/PEXELS_API_KEY/i.test(raw)) {
+    return "Pexels API key missing — add PEXELS_API_KEY to services/.env and restart the media service.";
+  }
+  const detail = raw.replace(/^API Error \[\d+\]:\s*/, "").trim();
+  return detail.slice(0, 200) || "Search failed";
+}
+
 export async function searchStockForScenes(
   projectId: string,
   scenes: SceneSearchSource[],
@@ -270,7 +282,7 @@ export async function searchStockForScenes(
           visualPrompt: scene.visualPrompt,
           items: [],
           loading: false,
-          error: "Search failed",
+          error: stockSearchErrorMessage(err),
         };
       }
     })
@@ -678,7 +690,10 @@ export async function dispatchStudioAction(
         mediaStore.setTaskId(renderRes.taskId);
         mediaStore.setRenderStatus("pending");
         mediaStore.setRenderProgress(0);
-        mediaStore.setRenderStep("Queued…");
+        mediaStore.setRenderStep(
+          projectStore.addAudioEnabled ? "Queued (with voiceover)…" : "Queued (visual only)…"
+        );
+        mediaStore.setRenderError(null);
         
         // Spawn Dynamic Polling
         pollVideoRenderStatus(projectId, renderRes.taskId);
@@ -711,12 +726,51 @@ export async function dispatchStudioAction(
 /**
  * Background polling loop for video renders.
  */
+const renderPolls = new Map<string, ReturnType<typeof setInterval>>();
+
+export function stopRenderPoll(taskId?: string | null) {
+  const id = taskId ?? useMediaStore.getState().taskId;
+  if (!id) return;
+  const handle = renderPolls.get(id);
+  if (handle) {
+    clearInterval(handle);
+    renderPolls.delete(id);
+  }
+}
+
+export async function cancelActiveVideoRender(projectId: string) {
+  const mediaStore = useMediaStore.getState();
+  const taskId = mediaStore.taskId;
+  stopRenderPoll(taskId);
+
+  if (taskId) {
+    try {
+      await apiRequest(projectId, `/video/render/${taskId}/cancel`, "POST");
+    } catch (err) {
+      console.warn("Cancel render request failed:", err);
+    }
+  }
+
+  mediaStore.setRenderStatus("idle");
+  mediaStore.setRenderProgress(0);
+  mediaStore.setRenderStep(null);
+  mediaStore.setRenderElapsedSec(null);
+  mediaStore.setRenderError(null);
+  mediaStore.setTaskId(null);
+}
+
 function pollVideoRenderStatus(projectId: string, taskId: string) {
   const mediaStore = useMediaStore.getState();
   const studioStore = useStudioStore.getState();
   
   // Ensure visual loader starts
   studioStore.setLoading(false);
+
+  stopRenderPoll(taskId);
+
+  let lastSignature = "";
+  let staleSince = Date.now();
+  const STALE_MS = 90_000;
 
   const intervalId = setInterval(async () => {
     try {
@@ -728,9 +782,30 @@ function pollVideoRenderStatus(projectId: string, taskId: string) {
       mediaStore.setRenderElapsedSec(
         typeof res.elapsedSec === "number" ? res.elapsedSec : null
       );
+      mediaStore.setRenderError(res.error ?? null);
+
+      const signature = `${res.status}:${res.progress}:${res.step ?? ""}:${res.elapsedSec ?? ""}`;
+      if (
+        signature === lastSignature &&
+        (res.status === "in_progress" || res.status === "pending")
+      ) {
+        if (Date.now() - staleSince > STALE_MS) {
+          clearInterval(intervalId);
+          renderPolls.delete(taskId);
+          mediaStore.setRenderStatus("failed");
+          mediaStore.setRenderError(
+            "Render worker stalled or crashed (no progress for 90s). Restart the Celery worker, then render again."
+          );
+          return;
+        }
+      } else {
+        lastSignature = signature;
+        staleSince = Date.now();
+      }
       
       if (res.status === "complete" || res.status === "failed") {
         clearInterval(intervalId);
+        renderPolls.delete(taskId);
         mediaStore.setVideoUrl(res.videoUrl || null);
         
         if (res.status === "complete") {
@@ -741,7 +816,11 @@ function pollVideoRenderStatus(projectId: string, taskId: string) {
     } catch (err) {
       console.error("Error polling render status:", err);
       clearInterval(intervalId);
+      renderPolls.delete(taskId);
       mediaStore.setRenderStatus("failed");
+      mediaStore.setRenderError("Lost connection to render worker. Try again with ./dev.sh start running.");
     }
   }, 2000);
+
+  renderPolls.set(taskId, intervalId);
 }

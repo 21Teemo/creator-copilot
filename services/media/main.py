@@ -20,6 +20,7 @@ from media.config import (
     AWS_S3_REGION,
     AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY,
+    PEXELS_API_KEY,
 )
 
 app = FastAPI(title="Creator Copilot - Media Service", version="0.1.0")
@@ -42,7 +43,7 @@ class SearchPayload(BaseModel):
     prompt: str
     visualReferences: Optional[List[VisualReferenceItem]] = None
     contentFormat: Optional[str] = "long"
-    includeAudio: Optional[bool] = True
+    includeAudio: Optional[bool] = False
 
 class SceneGeneratePayload(BaseModel):
     prompt: str
@@ -67,7 +68,7 @@ class SceneVideoItem(BaseModel):
 
 class RenderPayload(BaseModel):
     contentFormat: Optional[str] = "long"
-    includeAudio: Optional[bool] = True
+    includeAudio: Optional[bool] = False
     storyboard: Optional[List[StoryboardItem]] = []
     sceneImages: Optional[List[SceneImageItem]] = []
     sceneVideos: Optional[List[SceneVideoItem]] = []
@@ -137,8 +138,18 @@ def _upload_to_local_static(content: bytes, filename: str, project_id: str, stat
 # Routing endpoints
 router = APIRouter(prefix="/api/v1/projects/{projectId}")
 
+
+def _require_pexels_key() -> None:
+    if not PEXELS_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="PEXELS_API_KEY not configured. Add it to services/.env and restart the media service (port 8003).",
+        )
+
+
 @router.post("/stock/search")
 async def get_stock_photos(projectId: str, payload: SearchPayload):
+    _require_pexels_key()
     refs = [r.model_dump() for r in (payload.visualReferences or [])]
     photos = search_pexels_photos(payload.prompt, visual_references=refs)
     return photos
@@ -188,6 +199,7 @@ async def generate_scene_video_clip(projectId: str, payload: SceneGeneratePayloa
 
 @router.post("/stock/videos")
 async def get_stock_videos(projectId: str, payload: SearchPayload):
+    _require_pexels_key()
     refs = [r.model_dump() for r in (payload.visualReferences or [])]
     videos = search_pexels_videos(payload.prompt, visual_references=refs)
     return videos
@@ -229,8 +241,19 @@ async def trigger_render(projectId: str, payload: RenderPayload):
 
 @router.get("/video/render/{taskId}/status", response_model=RenderStatusResponse)
 async def get_render_status(projectId: str, taskId: str):
-    res = AsyncResult(taskId, app=celery_app)
-    
+    try:
+        res = AsyncResult(taskId, app=celery_app)
+        celery_state = res.state
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "progress": 0,
+            "step": None,
+            "elapsedSec": None,
+            "videoUrl": None,
+            "error": f"Render task state unreadable ({exc}). Submit a new render.",
+        }
+
     status_mapping = {
         "PENDING": "pending",
         "STARTED": "in_progress",
@@ -238,41 +261,55 @@ async def get_render_status(projectId: str, taskId: str):
         "SUCCESS": "complete",
         "FAILURE": "failed",
     }
-    
-    state = status_mapping.get(res.state, "pending")
+
+    state = status_mapping.get(celery_state, "pending")
     progress = 0
     step = None
     elapsed_sec = None
     video_url = None
     error_msg = None
-    
-    if res.state == "SUCCESS":
-        if isinstance(res.result, dict):
-            progress = res.result.get("progress", 100)
-            video_url = res.result.get("videoUrl")
-            state = res.result.get("status", "complete")
-            error_msg = res.result.get("error")
-        else:
-            state = "complete"
-            progress = 100
-    elif res.state == "PROGRESS" and isinstance(res.info, dict):
-        progress = res.info.get("progress", 0)
-        step = res.info.get("step")
-        elapsed_sec = res.info.get("elapsed_sec")
-    elif res.state == "FAILURE":
-        state = "failed"
-        error_msg = str(res.result)
-        if isinstance(res.info, dict):
+
+    try:
+        if celery_state == "SUCCESS":
+            result = res.result
+            if isinstance(result, dict):
+                progress = result.get("progress", 100)
+                video_url = result.get("videoUrl")
+                state = result.get("status", "complete")
+                error_msg = result.get("error")
+            else:
+                state = "complete"
+                progress = 100
+        elif celery_state == "PROGRESS" and isinstance(res.info, dict):
+            progress = res.info.get("progress", 0)
             step = res.info.get("step")
-        
+            elapsed_sec = res.info.get("elapsed_sec")
+        elif celery_state == "FAILURE":
+            state = "failed"
+            info = res.info
+            if isinstance(info, dict):
+                error_msg = info.get("error") or str(info.get("exc_message", info))
+                step = info.get("step")
+            else:
+                error_msg = str(info) if info else "Render failed"
+    except Exception as exc:
+        state = "failed"
+        error_msg = f"Could not read render result ({exc}). Submit a new render."
+
     return {
         "status": state,
         "progress": progress,
         "step": step,
         "elapsedSec": elapsed_sec,
         "videoUrl": video_url,
-        "error": error_msg
+        "error": error_msg,
     }
+
+@router.post("/video/render/{taskId}/cancel")
+async def cancel_render(projectId: str, taskId: str):
+    """Revoke an in-flight Celery render task."""
+    celery_app.control.revoke(taskId, terminate=True)
+    return {"status": "cancelled", "taskId": taskId}
 
 app.include_router(router)
 

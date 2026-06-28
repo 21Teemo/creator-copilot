@@ -1,16 +1,27 @@
+import gc
 import hashlib
 import logging
 import os
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, replace
+from typing import Any
+
 import httpx
 from celery import Celery
 from moviepy import AudioFileClip, ColorClip
 
-from media.config import REDIS_URL, RENDER_BGM_PATH
+try:
+    import psutil
+except ImportError:  # pragma: no cover
+    psutil = None
+
+from media.config import PUBLIC_VIDEO_BASE_URL, REDIS_URL, RENDER_BGM_PATH
 from media.services.elevenlabs import generate_voiceover
 from media.services.stock import search_pexels_videos, search_pexels_photos
 from media.futures.render_composition import (
+    RenderProfile,
     apply_scene_crossfades,
     build_cinematic_scene_clip,
     concat_segment_files,
@@ -25,24 +36,46 @@ from media.futures.render_composition import (
 
 logger = logging.getLogger("media.render")
 
-# Setup Celery client
 celery_app = Celery(
     "video_tasks",
     broker=REDIS_URL,
-    backend=REDIS_URL
+    backend=REDIS_URL,
 )
 
 celery_app.conf.update(
     task_track_started=True,
-    task_serializer='json',
-    accept_content=['json'],
-    result_serializer='json',
-    timezone='UTC',
+    task_serializer="json",
+    accept_content=["json"],
+    result_serializer="json",
+    timezone="UTC",
     enable_utc=True,
 )
 
 _MEDIA_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _ASSET_CACHE_DIR = os.path.join(_MEDIA_ROOT, "static", ".render-cache")
+_DOWNLOAD_RETRIES = int(os.getenv("RENDER_DOWNLOAD_RETRIES", "3"))
+_PARALLEL_SCENES = os.getenv("RENDER_PARALLEL_SCENES", "false").lower() in {"1", "true", "yes"}
+
+
+def _log_memory(label: str) -> None:
+    if psutil is None:
+        return
+    try:
+        proc = psutil.Process()
+        rss_mb = proc.memory_info().rss / (1024 * 1024)
+        logger.info("[memory] %s — RSS %.0f MB", label, rss_mb)
+    except Exception as exc:
+        logger.debug("Memory log failed for %s: %s", label, exc)
+
+
+@dataclass
+class SceneSpec:
+    scene_num: int
+    scene_idx: int
+    duration: float
+    audio_path: str | None
+    asset_path: str | None
+    is_video_asset: bool
 
 
 def _report_progress(
@@ -79,35 +112,234 @@ def download_file(url: str, suffix: str) -> str:
         return cached_path
 
     logger.info("Downloading asset: %s", url[:120])
+    last_error: Exception | None = None
 
-    fd, temp_path = tempfile.mkstemp(suffix=suffix, dir=_ASSET_CACHE_DIR)
+    for attempt in range(1, _DOWNLOAD_RETRIES + 1):
+        fd, temp_path = tempfile.mkstemp(suffix=suffix, dir=_ASSET_CACHE_DIR)
+        os.close(fd)
+        try:
+            with httpx.Client(follow_redirects=True) as client:
+                res = client.get(url, timeout=60.0)
+                res.raise_for_status()
+                with open(temp_path, "wb") as handle:
+                    handle.write(res.content)
+            os.replace(temp_path, cached_path)
+            size_kb = os.path.getsize(cached_path) // 1024
+            logger.info("Downloaded asset (%d KB) → %s", size_kb, cached_path)
+            return cached_path
+        except Exception as exc:
+            last_error = exc
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            if attempt < _DOWNLOAD_RETRIES:
+                delay = 0.5 * (2 ** (attempt - 1))
+                logger.warning(
+                    "Download attempt %d/%d failed (%s), retrying in %.1fs",
+                    attempt,
+                    _DOWNLOAD_RETRIES,
+                    exc,
+                    delay,
+                )
+                time.sleep(delay)
+
+    raise RuntimeError(f"Failed to download asset {url}: {last_error}") from last_error
+
+
+def _resolve_asset_url(
+    scene_num: int,
+    visual_prompt: str,
+    scene_images: list[dict],
+    scene_videos: list[dict],
+) -> tuple[str | None, bool]:
+    for sv in scene_videos:
+        if sv.get("sceneNumber") == scene_num and sv.get("videoUrl"):
+            return sv.get("videoUrl"), True
+
+    for si in scene_images:
+        if si.get("sceneNumber") == scene_num and si.get("imageUrl"):
+            return si.get("imageUrl"), False
+
+    if not visual_prompt:
+        return None, False
+
+    logger.info("Scene %s: no asset selected, searching Pexels", scene_num)
+    videos = search_pexels_videos(visual_prompt)
+    if videos:
+        return videos[0].get("videoUrl"), True
+
+    logger.info("Scene %s: no stock videos, searching photos", scene_num)
+    photos = search_pexels_photos(visual_prompt)
+    if photos:
+        return photos[0].get("imageUrl"), False
+
+    return None, False
+
+
+def _render_segment_from_spec(
+    spec: SceneSpec,
+    *,
+    profile: RenderProfile,
+    target_w: int,
+    target_h: int,
+) -> tuple[int, str]:
+    """Compose and encode one scene segment (thread-safe; ffmpeg releases GIL)."""
+    audio_clip = None
+    if spec.audio_path:
+        audio_clip = AudioFileClip(spec.audio_path)
+
+    if spec.asset_path:
+        base_clip = load_visual_clip(spec.asset_path, spec.duration, spec.is_video_asset)
+    else:
+        base_clip = ColorClip(size=(target_w, target_h), color=(30, 30, 30)).with_duration(
+            spec.duration
+        )
+
+    clip = build_cinematic_scene_clip(
+        base_clip,
+        duration=spec.duration,
+        target_w=target_w,
+        target_h=target_h,
+        is_video=spec.is_video_asset,
+        profile=profile,
+    )
+    base_clip.close()
+
+    if audio_clip:
+        clip = clip.with_audio(audio_clip)
+
+    fd, segment_path = tempfile.mkstemp(suffix=".mp4")
     os.close(fd)
-    try:
-        with httpx.Client(follow_redirects=True) as client:
-            res = client.get(url, timeout=60.0)
-            res.raise_for_status()
-            with open(temp_path, "wb") as handle:
-                handle.write(res.content)
-        os.replace(temp_path, cached_path)
-        size_kb = os.path.getsize(cached_path) // 1024
-        logger.info("Downloaded asset (%d KB) → %s", size_kb, cached_path)
-        return cached_path
-    except Exception as exc:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-        raise RuntimeError(f"Failed to download asset {url}: {exc}") from exc
+    write_scene_segment(clip, segment_path, profile, scene_label=f"scene_{spec.scene_num}")
+    clip.close()
+    gc.collect()
+    _log_memory(f"after scene {spec.scene_num} segment encode")
+    logger.info("Scene %s segment written: %s", spec.scene_num, segment_path)
+    return spec.scene_idx, segment_path
+
+
+def _prepare_scene_spec(
+    *,
+    idx: int,
+    scene: dict,
+    storyboard: list[dict],
+    total_scenes: int,
+    scene_images: list[dict],
+    scene_videos: list[dict],
+    include_audio: bool,
+    request_ids: list[str],
+    temp_files: list[str],
+) -> SceneSpec:
+    scene_num = scene.get("sceneNumber")
+    narration_text = scene.get("narrationText", "")
+    visual_prompt = scene.get("visualPrompt", "")
+
+    prev_narration = storyboard[idx - 1].get("narrationText", "") if idx > 0 else None
+    next_narration = (
+        storyboard[idx + 1].get("narrationText", "") if idx + 1 < total_scenes else None
+    )
+
+    duration = 5.0
+    audio_path: str | None = None
+
+    if include_audio and narration_text:
+        fd, temp_audio_path = tempfile.mkstemp(suffix=".mp3")
+        os.close(fd)
+        temp_files.append(temp_audio_path)
+
+        ok, request_id = generate_voiceover(
+            narration_text,
+            temp_audio_path,
+            previous_text=prev_narration,
+            next_text=next_narration,
+            previous_request_ids=request_ids or None,
+        )
+        if ok:
+            if request_id:
+                request_ids.append(request_id)
+            try:
+                audio_clip = AudioFileClip(temp_audio_path)
+                vo_duration = audio_clip.duration
+                duration = vo_duration + scene_tail_pause(narration_text)
+                audio_clip.close()
+                audio_path = temp_audio_path
+                logger.info(
+                    "Scene %s voiceover ready (%.2fs + tail)",
+                    scene_num,
+                    vo_duration,
+                )
+            except Exception as exc:
+                logger.warning("Scene %s failed to load audio: %s", scene_num, exc)
+        else:
+            logger.warning("Scene %s voiceover generation failed", scene_num)
+
+    asset_url, is_video_asset = _resolve_asset_url(
+        scene_num, visual_prompt, scene_images, scene_videos
+    )
+    asset_path: str | None = None
+
+    if asset_url:
+        try:
+            suffix = ".mp4" if is_video_asset else ".jpg"
+            asset_path = download_file(asset_url, suffix)
+            if not asset_path.startswith(_ASSET_CACHE_DIR):
+                temp_files.append(asset_path)
+        except Exception as exc:
+            logger.warning("Scene %s asset load failed: %s", scene_num, exc)
+            asset_path = None
+
+    return SceneSpec(
+        scene_num=scene_num,
+        scene_idx=idx,
+        duration=duration,
+        audio_path=audio_path,
+        asset_path=asset_path,
+        is_video_asset=is_video_asset,
+    )
+
+
+def _render_scenes_parallel(
+    specs: list[SceneSpec],
+    *,
+    profile: RenderProfile,
+    target_w: int,
+    target_h: int,
+    temp_files: list[str],
+) -> list[str]:
+    max_workers = min(
+        len(specs),
+        int(os.getenv("RENDER_PARALLEL_MAX", str(max(profile.threads // 2, 2)))),
+    )
+    logger.info("Parallel segment render: %d scenes, %d workers", len(specs), max_workers)
+
+    segment_by_idx: dict[int, str] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                _render_segment_from_spec,
+                spec,
+                profile=profile,
+                target_w=target_w,
+                target_h=target_h,
+            ): spec
+            for spec in specs
+        }
+        for future in as_completed(futures):
+            spec = futures[future]
+            scene_idx, segment_path = future.result()
+            temp_files.append(segment_path)
+            segment_by_idx[scene_idx] = segment_path
+
+    return [segment_by_idx[i] for i in range(len(specs))]
+
 
 @celery_app.task(bind=True)
 def render_video(self, project_id: str, payload: dict):
-    """
-    Celery task that compiles visual assets (images/videos) and voice narration
-    into a final video using MoviePy 2.0 and FFmpeg.
-    """
+    """Compile visual assets and voice narration into a final video."""
     storyboard = payload.get("storyboard", [])
     scene_images = payload.get("sceneImages", [])
     scene_videos = payload.get("sceneVideos", [])
     content_format = payload.get("contentFormat", "long")
-    include_audio = payload.get("includeAudio", True)
+    include_audio = bool(payload.get("includeAudio", False))
     render_quality = payload.get("renderQuality")
 
     profile = get_render_profile(content_format, quality=render_quality)
@@ -119,8 +351,24 @@ def render_video(self, project_id: str, payload: dict):
         logger.error("[render %s] Storyboard is empty", self.request.id)
         return {"status": "failed", "progress": 0, "error": "Storyboard is empty."}
 
+    # Multi-scene renders OOM in compose+crossfade mode — prefer segmented unless opted out
+    if total_scenes >= 2 and not profile.segmented:
+        seg_opt_out = os.getenv("RENDER_SEGMENTED", "true").lower() in {"0", "false", "no"}
+        if not seg_opt_out:
+            profile = replace(profile, segmented=True)
+            logger.info(
+                "[render %s] Auto-enabled segmented mode for %d scenes (memory safety)",
+                self.request.id,
+                total_scenes,
+            )
+
+    _log_memory("render start")
+
+    parallel_segments = profile.segmented and _PARALLEL_SCENES and total_scenes > 1
+
     logger.info(
-        "[render %s] Starting project=%s scenes=%d format=%s quality=%s profile=%dx%d codec=%s segmented=%s",
+        "[render %s] Starting project=%s scenes=%d format=%s quality=%s profile=%dx%d "
+        "codec=%s segmented=%s parallel=%s include_audio=%s",
         self.request.id,
         project_id,
         total_scenes,
@@ -130,6 +378,8 @@ def render_video(self, project_id: str, payload: dict):
         target_h,
         profile.codec,
         profile.segmented,
+        parallel_segments,
+        include_audio,
     )
     if profile.segmented:
         logger.info(
@@ -137,6 +387,7 @@ def render_video(self, project_id: str, payload: dict):
             "Set RENDER_SEGMENTED=false for crossfade transitions.",
             self.request.id,
         )
+
     _report_progress(
         self,
         1,
@@ -145,169 +396,145 @@ def render_video(self, project_id: str, payload: dict):
         total_scenes=total_scenes,
     )
 
-    scene_clips = []
+    scene_clips: list[Any] = []
     segment_paths: list[str] = []
-    temp_files = []
-    cached_downloads: set[str] = set()
-    
+    temp_files: list[str] = []
+
     try:
         request_ids: list[str] = []
 
-        for idx, scene in enumerate(storyboard):
-            scene_num = scene.get("sceneNumber")
-            narration_text = scene.get("narrationText", "")
-            visual_prompt = scene.get("visualPrompt", "")
-
-            prev_narration = storyboard[idx - 1].get("narrationText", "") if idx > 0 else None
-            next_narration = (
-                storyboard[idx + 1].get("narrationText", "") if idx + 1 < total_scenes else None
-            )
-            
-            progress_val = int((idx / total_scenes) * 80)
-            _report_progress(
-                self,
-                progress_val,
-                f"Scene {scene_num}/{total_scenes}: starting",
-                started_at=started_at,
-                scene=scene_num,
-                total_scenes=total_scenes,
-            )
-            
-            duration = 5.0
-            audio_clip = None
-            
-            if include_audio and narration_text:
+        if parallel_segments:
+            specs: list[SceneSpec] = []
+            for idx, scene in enumerate(storyboard):
+                scene_num = scene.get("sceneNumber")
+                progress_val = int((idx / total_scenes) * 60)
                 _report_progress(
                     self,
                     progress_val,
-                    f"Scene {scene_num}/{total_scenes}: generating voiceover",
+                    f"Scene {scene_num}/{total_scenes}: preparing"
+                    + (" (voiceover + assets)" if include_audio else " (visual assets)"),
                     started_at=started_at,
                     scene=scene_num,
                     total_scenes=total_scenes,
                 )
-                fd, temp_audio_path = tempfile.mkstemp(suffix=".mp3")
-                os.close(fd)
-                temp_files.append(temp_audio_path)
-                
-                ok, request_id = generate_voiceover(
-                    narration_text,
-                    temp_audio_path,
-                    previous_text=prev_narration,
-                    next_text=next_narration,
-                    previous_request_ids=request_ids or None,
+                specs.append(
+                    _prepare_scene_spec(
+                        idx=idx,
+                        scene=scene,
+                        storyboard=storyboard,
+                        total_scenes=total_scenes,
+                        scene_images=scene_images,
+                        scene_videos=scene_videos,
+                        include_audio=include_audio,
+                        request_ids=request_ids,
+                        temp_files=temp_files,
+                    )
                 )
-                if ok:
-                    if request_id:
-                        request_ids.append(request_id)
-                    try:
-                        audio_clip = AudioFileClip(temp_audio_path)
-                        duration = audio_clip.duration + scene_tail_pause(narration_text)
-                        logger.info(
-                            "Scene %s voiceover ready (%.2fs + tail)",
-                            scene_num,
-                            audio_clip.duration,
-                        )
-                    except Exception as ae:
-                        logger.warning("Scene %s failed to load audio: %s", scene_num, ae)
-                        audio_clip = None
-                else:
-                    logger.warning("Scene %s voiceover generation failed", scene_num)
-            
-            asset_url = None
-            is_video_asset = False
-            
-            for sv in scene_videos:
-                if sv.get("sceneNumber") == scene_num and sv.get("videoUrl"):
-                    asset_url = sv.get("videoUrl")
-                    is_video_asset = True
-                    break
-                    
-            if not asset_url:
-                for si in scene_images:
-                    if si.get("sceneNumber") == scene_num and si.get("imageUrl"):
-                        asset_url = si.get("imageUrl")
-                        is_video_asset = False
-                        break
-                        
-            if not asset_url and visual_prompt:
-                logger.info("Scene %s: no asset selected, searching Pexels", scene_num)
-                videos = search_pexels_videos(visual_prompt)
-                if videos:
-                    asset_url = videos[0].get("videoUrl")
-                    is_video_asset = True
-                else:
-                    logger.info("Scene %s: no stock videos, searching photos", scene_num)
-                    photos = search_pexels_photos(visual_prompt)
-                    if photos:
-                        asset_url = photos[0].get("imageUrl")
-                        is_video_asset = False
-            
-            base_clip = None
-            if asset_url:
-                try:
+
+            _report_progress(
+                self,
+                65,
+                f"Encoding {len(specs)} scenes in parallel",
+                started_at=started_at,
+                total_scenes=total_scenes,
+            )
+            segment_paths = _render_scenes_parallel(
+                specs,
+                profile=profile,
+                target_w=target_w,
+                target_h=target_h,
+                temp_files=temp_files,
+            )
+        else:
+            for idx, scene in enumerate(storyboard):
+                scene_num = scene.get("sceneNumber")
+                progress_val = int((idx / total_scenes) * 80)
+                _report_progress(
+                    self,
+                    progress_val,
+                    f"Scene {scene_num}/{total_scenes}: starting",
+                    started_at=started_at,
+                    scene=scene_num,
+                    total_scenes=total_scenes,
+                )
+
+                spec = _prepare_scene_spec(
+                    idx=idx,
+                    scene=scene,
+                    storyboard=storyboard,
+                    total_scenes=total_scenes,
+                    scene_images=scene_images,
+                    scene_videos=scene_videos,
+                    include_audio=include_audio,
+                    request_ids=request_ids,
+                    temp_files=temp_files,
+                )
+
+                if include_audio and scene.get("narrationText"):
                     _report_progress(
                         self,
                         progress_val,
-                        f"Scene {scene_num}/{total_scenes}: loading {'video' if is_video_asset else 'image'} asset",
+                        f"Scene {scene_num}/{total_scenes}: composing cinematic layers",
                         started_at=started_at,
                         scene=scene_num,
                         total_scenes=total_scenes,
                     )
-                    suffix = ".mp4" if is_video_asset else ".jpg"
-                    temp_path = download_file(asset_url, suffix)
-                    if not temp_path.startswith(_ASSET_CACHE_DIR):
-                        temp_files.append(temp_path)
+
+                if profile.segmented:
+                    _report_progress(
+                        self,
+                        progress_val,
+                        f"Scene {scene_num}/{total_scenes}: encoding segment (FFmpeg)",
+                        started_at=started_at,
+                        scene=scene_num,
+                        total_scenes=total_scenes,
+                    )
+                    _, segment_path = _render_segment_from_spec(
+                        spec,
+                        profile=profile,
+                        target_w=target_w,
+                        target_h=target_h,
+                    )
+                    temp_files.append(segment_path)
+                    segment_paths.append(segment_path)
+                    gc.collect()
+                    _log_memory(f"after scene {scene_num} segment")
+                else:
+                    audio_clip = None
+                    if spec.audio_path:
+                        audio_clip = AudioFileClip(spec.audio_path)
+
+                    if spec.asset_path:
+                        base_clip = load_visual_clip(
+                            spec.asset_path, spec.duration, spec.is_video_asset
+                        )
                     else:
-                        cached_downloads.add(temp_path)
-                    base_clip = load_visual_clip(temp_path, duration, is_video_asset)
-                except Exception as ve:
-                    logger.warning("Scene %s asset load failed: %s — using fallback", scene_num, ve)
-                    base_clip = None
-                    
-            if base_clip is None:
-                logger.warning("Scene %s using blank fallback clip (%.1fs)", scene_num, duration)
-                base_clip = ColorClip(size=(target_w, target_h), color=(30, 30, 30)).with_duration(duration)
+                        logger.warning(
+                            "Scene %s using blank fallback clip (%.1fs)",
+                            scene_num,
+                            spec.duration,
+                        )
+                        base_clip = ColorClip(
+                            size=(target_w, target_h), color=(30, 30, 30)
+                        ).with_duration(spec.duration)
 
-            _report_progress(
-                self,
-                progress_val,
-                f"Scene {scene_num}/{total_scenes}: composing cinematic layers",
-                started_at=started_at,
-                scene=scene_num,
-                total_scenes=total_scenes,
-            )
-            clip = build_cinematic_scene_clip(
-                base_clip,
-                duration=duration,
-                target_w=target_w,
-                target_h=target_h,
-                is_video=is_video_asset,
-                profile=profile,
-            )
-            base_clip.close()
+                    clip = build_cinematic_scene_clip(
+                        base_clip,
+                        duration=spec.duration,
+                        target_w=target_w,
+                        target_h=target_h,
+                        is_video=spec.is_video_asset,
+                        profile=profile,
+                    )
+                    base_clip.close()
 
-            if audio_clip:
-                clip = clip.with_audio(audio_clip)
+                    if audio_clip:
+                        clip = clip.with_audio(audio_clip)
 
-            if profile.segmented:
-                _report_progress(
-                    self,
-                    progress_val,
-                    f"Scene {scene_num}/{total_scenes}: encoding segment (FFmpeg)",
-                    started_at=started_at,
-                    scene=scene_num,
-                    total_scenes=total_scenes,
-                )
-                fd, segment_path = tempfile.mkstemp(suffix=".mp4")
-                os.close(fd)
-                temp_files.append(segment_path)
-                write_scene_segment(clip, segment_path, profile, scene_label=f"scene_{scene_num}")
-                clip.close()
-                segment_paths.append(segment_path)
-                logger.info("Scene %s segment written: %s", scene_num, segment_path)
-            else:
-                scene_clips.append(clip)
+                    scene_clips.append(clip)
+                    _log_memory(f"after scene {scene_num} compose (in-memory)")
 
+        _log_memory("before finalize")
         _report_progress(
             self,
             85,
@@ -400,28 +627,23 @@ def render_video(self, project_id: str, payload: dict):
             started_at=started_at,
             total_scenes=total_scenes,
         )
-            
+
         return {
             "status": "complete",
             "progress": 100,
-            "videoUrl": f"http://127.0.0.1:8003/static/{output_filename}"
+            "videoUrl": f"{PUBLIC_VIDEO_BASE_URL}/static/{output_filename}",
         }
-        
-    except Exception as e:
-        import traceback
-        logger.exception("[render %s] Failed: %s", self.request.id, e)
-        traceback.print_exc()
-        self.update_state(
-            state="FAILURE",
-            meta={"progress": 100, "error": str(e), "step": f"Failed: {e}"},
-        )
-        return {"status": "failed", "progress": 0, "error": str(e)}
-        
+
+    except Exception as exc:
+        logger.exception("[render %s] Failed: %s", self.request.id, exc)
+        err = str(exc).split("\n")[0][:300]
+        return {"status": "failed", "progress": 0, "error": err}
+
     finally:
         logger.debug("[render %s] Cleaning up %d temp files", self.request.id, len(temp_files))
-        for f in temp_files:
-            if os.path.exists(f):
+        for path in temp_files:
+            if os.path.exists(path):
                 try:
-                    os.remove(f)
+                    os.remove(path)
                 except Exception as cle:
-                    logger.warning("Failed to delete temp file %s: %s", f, cle)
+                    logger.warning("Failed to delete temp file %s: %s", path, cle)

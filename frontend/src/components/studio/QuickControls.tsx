@@ -100,7 +100,13 @@ export default function QuickControls({ onActionClick }: QuickControlsProps) {
         {/* Persistent Add Audio Toggle (Shown once scenes exist) */}
         {displayAudioToggle && (
           <button
+            type="button"
             onClick={() => setAddAudioEnabled(!addAudioEnabled)}
+            title={
+              addAudioEnabled
+                ? "Voiceover will be generated on the next FFmpeg render"
+                : "Enable to add ElevenLabs voiceover on the next FFmpeg render"
+            }
             className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 whitespace-nowrap ${
               addAudioEnabled
                 ? "bg-studio-success/15 border-studio-success/50 text-studio-success"

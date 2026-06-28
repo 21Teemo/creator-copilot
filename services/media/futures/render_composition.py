@@ -56,7 +56,7 @@ def get_render_profile(content_format: str, quality: str | None = None) -> Rende
     is_short = content_format == "short"
     codec = os.getenv("RENDER_CODEC", "libx264").strip()
     threads = int(os.getenv("RENDER_THREADS", str(os.cpu_count() or 4)))
-    segmented = os.getenv("RENDER_SEGMENTED", "false").lower() in {"1", "true", "yes"}
+    segmented = os.getenv("RENDER_SEGMENTED", "true").lower() in {"1", "true", "yes"}
 
     if quality == "fast":
         target_w, target_h = (480, 854) if is_short else (854, 480)
@@ -113,6 +113,13 @@ def _encode_params(codec: str, *, preset: str, crf: str) -> tuple[str, ...]:
     if codec == "h264_nvenc":
         nvenc_preset = {"ultrafast": "p1", "veryfast": "p3", "fast": "p4"}.get(preset, "p4")
         return ("-preset", nvenc_preset, "-cq", crf)
+    if codec == "h264_videotoolbox":
+        # VideoToolbox does not support -q:v; use target bitrate instead.
+        bitrate = {"ultrafast": "2500k", "veryfast": "4000k", "fast": "6000k"}.get(preset, "4000k")
+        return ("-b:v", bitrate, "-allow_sw", "1")
+    if codec == "h264_amf":
+        qp = {"ultrafast": "28", "veryfast": "24", "fast": "20"}.get(preset, crf)
+        return ("-quality", "speed", "-rc", "cqp", "-qp_i", qp, "-qp_p", qp)
     return ("-preset", preset, "-crf", crf, "-tune", "zerolatency")
 
 
@@ -135,15 +142,18 @@ def write_render_output(
         profile.threads,
     )
     started = time.monotonic()
-    clip.write_videofile(
-        output_path,
-        fps=profile.fps,
-        codec=profile.codec,
-        audio_codec="aac",
-        threads=profile.threads,
-        ffmpeg_params=list(profile.ffmpeg_params),
-        logger=None,
-    )
+    write_kwargs: dict = {
+        "fps": profile.fps,
+        "codec": profile.codec,
+        "threads": profile.threads,
+        "ffmpeg_params": list(profile.ffmpeg_params),
+        "logger": None,
+    }
+    if getattr(clip, "audio", None) is not None:
+        write_kwargs["audio_codec"] = "aac"
+    else:
+        write_kwargs["audio"] = False
+    clip.write_videofile(output_path, **write_kwargs)
     elapsed = time.monotonic() - started
     size_mb = os.path.getsize(output_path) / (1024 * 1024) if os.path.isfile(output_path) else 0
     logger.info(
@@ -263,7 +273,7 @@ def _foreground_clip(
     ken_burns: bool = True,
 ):
     if is_video or not ken_burns:
-        fg = clip.resized(height=int(target_h * 0.88))
+        fg = clip.resized(new_size=(target_w, target_h))
         return fg.with_position("center")
 
     zoom_end = 1.0 + KEN_BURNS_ZOOM
@@ -289,33 +299,33 @@ def build_cinematic_scene_clip(
     is_video: bool,
     profile: RenderProfile | None = None,
 ):
-    """Layer blurred background, Ken Burns / PiP foreground, and color grade."""
+    """Full-bleed scene: crop to aspect, scale to frame (no blurred PiP edges)."""
     ken_burns = profile.ken_burns if profile else True
     color_grade = profile.color_grade if profile else True
-    static_image_bg = profile.static_image_bg if profile else True
 
     try:
         clip = crop_to_aspect(clip, target_w / target_h)
     except Exception as exc:
         logger.warning("Aspect crop failed: %s", exc)
 
-    bg_source = clip
-    if static_image_bg and not is_video:
-        bg_source = _static_frame_clip(clip, duration)
+    if is_video or not ken_burns:
+        composed = clip.resized(new_size=(target_w, target_h))
+    else:
+        base = clip.resized(new_size=(target_w, target_h))
+        fg = _foreground_clip(
+            base,
+            duration,
+            target_w,
+            target_h,
+            is_video=False,
+            ken_burns=True,
+        )
+        composed = CompositeVideoClip(
+            [fg.with_duration(duration)],
+            size=(target_w, target_h),
+        )
 
-    bg = _soft_background(bg_source, target_w, target_h, color_grade=color_grade)
-    fg = _foreground_clip(
-        clip,
-        duration,
-        target_w,
-        target_h,
-        is_video,
-        ken_burns=ken_burns,
-    )
-
-    layers: list = [bg.with_duration(duration), fg.with_duration(duration)]
-
-    composed = CompositeVideoClip(layers, size=(target_w, target_h)).with_duration(duration)
+    composed = composed.with_duration(duration)
     if color_grade:
         composed = composed.with_effects([vfx.LumContrast(contrast=1.08, lum=4)])
     return composed
@@ -324,6 +334,9 @@ def build_cinematic_scene_clip(
 def load_visual_clip(asset_path: str, duration: float, is_video: bool):
     if is_video:
         video_file = VideoFileClip(asset_path)
+        # Stock clips may carry audio; MoviePy often fails decoding it during export.
+        if video_file.audio is not None:
+            video_file = video_file.without_audio()
         if video_file.duration < duration:
             repeats = int(duration / max(video_file.duration, 0.1)) + 1
             looped = concatenate_videoclips([video_file] * repeats).with_duration(duration)

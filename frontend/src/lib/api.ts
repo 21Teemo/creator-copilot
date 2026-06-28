@@ -79,7 +79,7 @@ export async function apiRequest(projectId: string, path: string, method = "POST
           errText.includes("ECONNREFUSED") ||
           errText.includes("connect ECONNREFUSED")));
     const hint = backendUnavailable
-      ? "Backend service unavailable — run ./dev.sh from the repo root (research on port 8001)."
+      ? "Backend service unavailable — run ./dev.sh start from the repo root (media on port 8003 for stock search)."
       : errText || response.statusText;
     throw new Error(`API Error [${response.status}]: ${hint}`);
   }
