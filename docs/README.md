@@ -75,5 +75,5 @@ creator-copilot/
 ## Environment
 
 - **Research / Scripting / SEO**: `services/.env` — `DEEPSEEK_API_KEY` for text generation; `GEMINI_API_KEY` for thumbnail vision analysis and grading.
-- **Media Service**: `GEMINI_API_KEY` for scene pictures (Nano Banana) and scene videos (Veo); ElevenLabs for voice synthesis (`ELEVEN_LABS_VOICE_ID`, `ELEVEN_LABS_MODEL_ID`, stability/style tunables). Optional `PEXELS_API_KEY` only for manual stock search drawers.
+- **Media Service**: `GEMINI_API_KEY` for scene pictures (Nano Banana) and scene videos (Veo); ElevenLabs for voice synthesis (`ELEVEN_LABS_VOICE_ID`, `ELEVEN_LABS_MODEL_ID`, stability/style tunables). Optional `PEXELS_API_KEY` only for manual stock search drawers. Video render supports Ken Burns, crossfades, and optional `RENDER_BGM_PATH` background bed. Render progress is logged to the Celery worker (`media.render` logger) and exposed via `/video/render/{taskId}/status` (`step`, `elapsedSec`).
 - Each microservice runs in its own isolated Python `venv`.

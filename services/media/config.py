@@ -21,6 +21,7 @@ ELEVEN_LABS_SIMILARITY_BOOST = float(os.getenv("ELEVEN_LABS_SIMILARITY_BOOST", "
 ELEVEN_LABS_STYLE = float(os.getenv("ELEVEN_LABS_STYLE", "0.42"))
 ELEVEN_LABS_SPEED = float(os.getenv("ELEVEN_LABS_SPEED", "1.0"))
 ELEVEN_LABS_OUTPUT_FORMAT = os.getenv("ELEVEN_LABS_OUTPUT_FORMAT", "mp3_44100_128")
+RENDER_BGM_PATH = os.getenv("RENDER_BGM_PATH", "")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 # Optional cloud asset storage (checked in priority order)

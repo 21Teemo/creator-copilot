@@ -78,6 +78,8 @@ class RenderTriggerResponse(BaseModel):
 class RenderStatusResponse(BaseModel):
     status: str
     progress: int
+    step: Optional[str] = None
+    elapsedSec: Optional[float] = None
     videoUrl: Optional[str] = None
     error: Optional[str] = None
 
@@ -239,6 +241,8 @@ async def get_render_status(projectId: str, taskId: str):
     
     state = status_mapping.get(res.state, "pending")
     progress = 0
+    step = None
+    elapsed_sec = None
     video_url = None
     error_msg = None
     
@@ -253,13 +257,19 @@ async def get_render_status(projectId: str, taskId: str):
             progress = 100
     elif res.state == "PROGRESS" and isinstance(res.info, dict):
         progress = res.info.get("progress", 0)
+        step = res.info.get("step")
+        elapsed_sec = res.info.get("elapsed_sec")
     elif res.state == "FAILURE":
         state = "failed"
         error_msg = str(res.result)
+        if isinstance(res.info, dict):
+            step = res.info.get("step")
         
     return {
         "status": state,
         "progress": progress,
+        "step": step,
+        "elapsedSec": elapsed_sec,
         "videoUrl": video_url,
         "error": error_msg
     }

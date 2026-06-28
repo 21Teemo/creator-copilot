@@ -10,7 +10,7 @@ interface VideoViewProps {
 }
 
 export default function VideoView({ onPush }: VideoViewProps) {
-  const { videoUrl, renderStatus, renderProgress } = useMediaStore();
+  const { videoUrl, renderStatus, renderProgress, renderStep, renderElapsedSec } = useMediaStore();
   const contentFormat = useProjectStore((state) => state.contentFormat);
 
   const isRendering = renderStatus === "pending" || renderStatus === "in_progress";
@@ -61,7 +61,7 @@ export default function VideoView({ onPush }: VideoViewProps) {
                 Assembling Media Pipelines
               </h4>
               <p className="text-xs text-studio-text-secondary">
-                Stitching voiceover, background music, and keyframes...
+                {renderStep || "Stitching voiceover, background music, and keyframes..."}
               </p>
             </div>
 
@@ -80,7 +80,10 @@ export default function VideoView({ onPush }: VideoViewProps) {
 
             <div className="flex items-center gap-2 text-[10px] text-studio-text-secondary">
               <span className="w-1.5 h-1.5 rounded-full bg-studio-success animate-ping" />
-              <span>Status: {renderStatus}</span>
+              <span>
+                Status: {renderStatus}
+                {renderElapsedSec != null ? ` · ${renderElapsedSec}s elapsed` : ""}
+              </span>
             </div>
           </div>
         ) : renderStatus === "failed" ? (

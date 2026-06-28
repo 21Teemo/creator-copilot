@@ -1,6 +1,13 @@
 # video-worker/worker.py
 # Celery video rendering worker entrypoint
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+
 from media.futures.render_tasks import celery_app
 
 if __name__ == "__main__":

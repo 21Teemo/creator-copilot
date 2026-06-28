@@ -678,6 +678,7 @@ export async function dispatchStudioAction(
         mediaStore.setTaskId(renderRes.taskId);
         mediaStore.setRenderStatus("pending");
         mediaStore.setRenderProgress(0);
+        mediaStore.setRenderStep("Queued…");
         
         // Spawn Dynamic Polling
         pollVideoRenderStatus(projectId, renderRes.taskId);
@@ -723,6 +724,10 @@ function pollVideoRenderStatus(projectId: string, taskId: string) {
       
       mediaStore.setRenderStatus(res.status);
       mediaStore.setRenderProgress(res.progress);
+      mediaStore.setRenderStep(res.step ?? null);
+      mediaStore.setRenderElapsedSec(
+        typeof res.elapsedSec === "number" ? res.elapsedSec : null
+      );
       
       if (res.status === "complete" || res.status === "failed") {
         clearInterval(intervalId);
