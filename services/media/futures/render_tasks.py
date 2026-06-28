@@ -63,10 +63,17 @@ def render_video(self, project_id: str, payload: dict):
     temp_files = []
     
     try:
+        request_ids: list[str] = []
+
         for idx, scene in enumerate(storyboard):
             scene_num = scene.get("sceneNumber")
             narration_text = scene.get("narrationText", "")
             visual_prompt = scene.get("visualPrompt", "")
+
+            prev_narration = storyboard[idx - 1].get("narrationText", "") if idx > 0 else None
+            next_narration = (
+                storyboard[idx + 1].get("narrationText", "") if idx + 1 < total_scenes else None
+            )
             
             # Step 1: Update progress
             progress_val = int((idx / total_scenes) * 80)
@@ -82,7 +89,16 @@ def render_video(self, project_id: str, payload: dict):
                 os.close(fd)
                 temp_files.append(temp_audio_path)
                 
-                if generate_voiceover(narration_text, temp_audio_path):
+                ok, request_id = generate_voiceover(
+                    narration_text,
+                    temp_audio_path,
+                    previous_text=prev_narration,
+                    next_text=next_narration,
+                    previous_request_ids=request_ids or None,
+                )
+                if ok:
+                    if request_id:
+                        request_ids.append(request_id)
                     try:
                         audio_clip = AudioFileClip(temp_audio_path)
                         duration = audio_clip.duration

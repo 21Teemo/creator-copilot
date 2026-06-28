@@ -65,7 +65,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-/** Upload reference images + labels — optional; enables FLUX identity lock when images are set */
+/** Upload reference images + labels — optional; guides Gemini scene generation when images are set */
 export function VisualReferencesPanel({
   collapsible = false,
   defaultOpen = true,
@@ -119,14 +119,14 @@ export function VisualReferencesPanel({
             onClick={() => setIsOpen((v) => !v)}
             className="text-[10px] font-semibold text-accent hover:text-accent/80 shrink-0 cursor-pointer"
           >
-            {isOpen ? "Hide" : hasUploadedRefs ? "Show" : "Add for FLUX lock"}
+            {isOpen ? "Hide" : hasUploadedRefs ? "Show" : "Add references"}
           </button>
         )}
       </div>
       {(!collapsible || isOpen) && (
         <>
       <p className="text-[10px] text-studio-text-secondary mb-3 leading-relaxed">
-        Skip this to use stock search. Upload images only if you want FLUX PuLID/Kontext identity lock across scenes.
+        Upload reference images to steer Gemini Nano Banana across scenes. Labels are appended to each scene prompt.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {REF_CATEGORIES.map((cat) => {
@@ -408,13 +408,14 @@ export default function ScriptView({ onPush }: ScriptViewProps) {
           ))
         )}
       </div>
-      {onPush && storyboard.length > 0 && (
+      {storyboard.length > 0 && (
         <div className="px-4 pb-4 pt-0 flex justify-end shrink-0">
           <button
-            onClick={() => onPush("Generate storyboard keyframe scene pictures for the script.", "scene_pictures")}
+            type="button"
+            onClick={() => useStudioStore.getState().setActiveView("scenes")}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent hover:bg-accent/90 text-xs font-bold text-white transition-all cursor-pointer shadow-md"
           >
-            Confirm &amp; Source Scene Pictures &rarr;
+            Confirm &amp; Continue to Scene Pictures &rarr;
           </button>
         </div>
       )}

@@ -348,7 +348,7 @@ The user already has a full research brief in another step. Your ONLY job here i
 
 STRICT OUTPUT RULES:
 1. "storyboard[].visualPrompt" = standalone image-generation prompt (max ~200 chars). Include: subject, action, environment, lighting, camera/framing. NEVER include voiceover, metadata, URLs, hashtags, stats, or research text.
-2. "storyboard[].narrationText" = 1-2 short spoken sentences for that scene only. No metadata.
+2. "storyboard[].narrationText" = 1-2 spoken sentences with natural rhythm — contractions, emphasis, and emotion where it fits (excited, curious, warm). Write for voice, not essay. No metadata.
 3. "script" = all narration lines joined — spoken words only, no metadata.
 4. Do NOT repeat, quote, or paraphrase the research brief in visualPrompt. Translate the topic into concrete visual scenes.
 5. Generate 3-5 scenes. Match visual style notes in visualPrompt when provided.

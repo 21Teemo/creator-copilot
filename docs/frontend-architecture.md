@@ -146,8 +146,8 @@ Explore Trends → Fact Finder → Write Script → Scene Pictures → Scene Vid
 | 1 | Explore Trends | `explore_trends` | `trends` | `POST /research/trends/short` or `/long` |
 | 2 | Fact Finder | `fact_finder` | `facts` | `POST /research/web-search`, `/summarize` |
 | 3 | Write Script | `write_script` | `script` | `POST /scripting/storyboard` |
-| 4 | Scene Pictures | `scene_pictures` | `scenes` | Media pipeline (FLUX / Imagen) |
-| 5 | Scene Videos | `scene_videos` | `video` | `POST /video/render` |
+| 4 | Scene Pictures | `scene_pictures` | `scenes` | Gemini Nano Banana (`/generate/scene`) |
+| 5 | Scene Videos | `scene_videos` | `video` | Gemini Veo (`/generate/scene/video`) |
 | 6 | SEO & Publish | `seo_publish` | `seo` | `POST /seo/titles`, `/metadata`, `/publish` |
 
 **Behavior rules:**

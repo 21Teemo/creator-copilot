@@ -1,39 +1,31 @@
 import base64
 import os
 import re
-import httpx
+import uuid
 
-from media.config import REPLICATE_API_TOKEN
-from media.services.stock import enrich_stock_query, search_pexels_photos
+from google import genai
 
-PULID_MODEL = "bytedance/flux-pulid"
-KONTEXT_MODEL = "black-forest-labs/flux-kontext-dev"
+from media.config import GEMINI_API_KEY, GEMINI_IMAGE_MODEL
+from media.services.stock import enrich_stock_query
 
-ASPECT_SIZES = {
-    "short": (768, 1344),
-    "long": (1344, 768),
+ASPECT_RATIOS = {
+    "short": "9:16",
+    "long": "16:9",
 }
 
 
-def has_reference_images(visual_references: list | None) -> bool:
-    if not visual_references:
-        return False
-    return any((ref.get("imageUrl") or "").strip() for ref in visual_references)
+def _gemini_client() -> genai.Client:
+    if not GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY is not configured")
+    return genai.Client(api_key=GEMINI_API_KEY)
 
 
-def _pick_reference(visual_references: list | None, category: str) -> dict | None:
-    if not visual_references:
-        return None
-    for ref in visual_references:
-        if ref.get("category") == category and (ref.get("imageUrl") or "").strip():
-            return ref
-    return None
-
-
-def _build_generation_prompt(prompt: str, visual_references: list | None) -> str:
+def _build_generation_prompt(prompt: str, visual_references: list | None, content_format: str = "long") -> str:
     enriched = enrich_stock_query(prompt, visual_references)
+    aspect_ratio = ASPECT_RATIOS.get(content_format, ASPECT_RATIOS["long"])
     return (
-        f"{enriched}. Cinematic lighting, sharp focus, photorealistic, no text overlays, no watermarks."
+        f"{enriched}. Aspect ratio {aspect_ratio}. Cinematic lighting, sharp focus, photorealistic, "
+        "no text overlays, no watermarks."
     )[:500]
 
 
@@ -50,6 +42,8 @@ def _load_image_bytes(image_url: str, project_id: str, static_dir: str) -> tuple
             with open(full_path, "rb") as handle:
                 return handle.read(), "image/jpeg"
 
+    import httpx
+
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -65,147 +59,53 @@ def _load_image_bytes(image_url: str, project_id: str, static_dir: str) -> tuple
         return res.content, mime_type
 
 
-def _upload_replicate_file(image_bytes: bytes, mime_type: str) -> str:
-    ext = mime_type.split("/")[-1] if "/" in mime_type else "jpg"
-    if ext == "jpeg":
-        ext = "jpg"
-    filename = f"reference.{ext}"
-
-    with httpx.Client(timeout=60.0) as client:
-        res = client.post(
-            "https://api.replicate.com/v1/files",
-            headers={"Authorization": f"Bearer {REPLICATE_API_TOKEN}"},
-            files={"content": (filename, image_bytes, mime_type or "application/octet-stream")},
-        )
-        res.raise_for_status()
-        payload = res.json()
-        url = payload.get("urls", {}).get("get")
-        if not url:
-            raise RuntimeError("Replicate file upload did not return a URL")
-        return url
-
-
-def _resolve_replicate_image_url(image_url: str, project_id: str, static_dir: str) -> str:
-    trimmed = (image_url or "").strip()
-    if not trimmed:
-        raise ValueError("Reference image URL is empty")
-
-    if trimmed.startswith("http://127.0.0.1") or trimmed.startswith("http://localhost"):
-        image_bytes, mime_type = _load_image_bytes(trimmed, project_id, static_dir)
-        return _upload_replicate_file(image_bytes, mime_type)
-
-    if trimmed.startswith("http://") or trimmed.startswith("https://"):
-        return trimmed
-
-    image_bytes, mime_type = _load_image_bytes(trimmed, project_id, static_dir)
-    return _upload_replicate_file(image_bytes, mime_type)
-
-
-def _run_replicate_model(model: str, model_input: dict) -> str:
-    with httpx.Client(timeout=300.0) as client:
-        create = client.post(
-            f"https://api.replicate.com/v1/models/{model}/predictions",
-            headers={
-                "Authorization": f"Bearer {REPLICATE_API_TOKEN}",
-                "Content-Type": "application/json",
-                "Prefer": "wait",
-            },
-            json={"input": model_input},
-        )
-        create.raise_for_status()
-        prediction = create.json()
-
-        status = prediction.get("status")
-        if status == "succeeded":
-            return _extract_output_url(prediction.get("output"))
-
-        if status in {"starting", "processing", "queued"}:
-            poll_url = prediction.get("urls", {}).get("get")
-            if not poll_url:
-                raise RuntimeError(f"Replicate prediction stuck in {status}")
-            for _ in range(120):
-                poll = client.get(
-                    poll_url,
-                    headers={"Authorization": f"Bearer {REPLICATE_API_TOKEN}"},
-                )
-                poll.raise_for_status()
-                prediction = poll.json()
-                status = prediction.get("status")
-                if status == "succeeded":
-                    return _extract_output_url(prediction.get("output"))
-                if status in {"failed", "canceled"}:
-                    break
-            raise RuntimeError(prediction.get("error") or f"Replicate prediction {status}")
-
-        raise RuntimeError(prediction.get("error") or f"Replicate prediction {status}")
-
-
-def _extract_output_url(output) -> str:
-    if isinstance(output, str):
-        return output
-    if isinstance(output, list) and output:
-        first = output[0]
-        if isinstance(first, str):
-            return first
-    raise RuntimeError("Replicate returned no image URL")
-
-
-def _generate_with_pulid(
-    prompt: str,
-    character_ref: dict,
-    content_format: str,
+def save_generated_asset(
+    content: bytes,
+    filename: str,
     project_id: str,
     static_dir: str,
 ) -> str:
-    width, height = ASPECT_SIZES.get(content_format, ASPECT_SIZES["long"])
-    main_face_image = _resolve_replicate_image_url(character_ref["imageUrl"], project_id, static_dir)
-    return _run_replicate_model(
-        PULID_MODEL,
-        {
-            "prompt": prompt,
-            "main_face_image": main_face_image,
-            "width": width,
-            "height": height,
-            "id_weight": 1.0,
-            "start_step": 4,
-            "num_steps": 20,
-            "guidance_scale": 4,
-            "output_format": "jpg",
-            "output_quality": 90,
-            "num_outputs": 1,
-            "negative_prompt": (
-                "bad quality, worst quality, text, signature, watermark, extra limbs, "
-                "deformed eyes, blurry, low resolution"
-            ),
-        },
-    )
+    safe_name = f"{uuid.uuid4().hex}_{filename}"
+    rel_path = f"generated/{project_id}/{safe_name}"
+    full_path = os.path.join(static_dir, rel_path)
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    with open(full_path, "wb") as handle:
+        handle.write(content)
+    return f"/api/v1/projects/{project_id}/media/static/{rel_path}"
 
 
-def _generate_with_kontext(
+def _build_interaction_input(
     prompt: str,
-    reference_ref: dict,
-    content_format: str,
+    visual_references: list | None,
     project_id: str,
     static_dir: str,
-) -> str:
-    input_image = _resolve_replicate_image_url(reference_ref["imageUrl"], project_id, static_dir)
-    aspect_ratio = "9:16" if content_format == "short" else "16:9"
-    kontext_prompt = (
-        f"Recreate this scene with the same subject, props, and environment style. {prompt}"
-    )
-    return _run_replicate_model(
-        KONTEXT_MODEL,
-        {
-            "prompt": kontext_prompt[:500],
-            "input_image": input_image,
-            "aspect_ratio": aspect_ratio,
-            "guidance": 2.5,
-            "num_inference_steps": 28,
-            "output_format": "jpg",
-            "output_quality": 90,
-            "go_fast": True,
-        },
-    )
+) -> list | str:
+    refs = visual_references or []
+    ref_images = [
+        ref for ref in refs if (ref.get("imageUrl") or "").strip()
+    ][:3]
+
+    if not ref_images:
+        return prompt
+
+    parts: list[dict] = [{"type": "text", "text": prompt}]
+    for ref in ref_images:
+        label = (ref.get("label") or ref.get("category") or "reference").strip()
+        image_bytes, mime_type = _load_image_bytes(ref["imageUrl"], project_id, static_dir)
+        parts.append(
+            {
+                "type": "text",
+                "text": f"Use this {ref.get('category', 'reference')} reference ({label}) for visual consistency.",
+            }
+        )
+        parts.append(
+            {
+                "type": "image",
+                "data": base64.b64encode(image_bytes).decode("utf-8"),
+                "mime_type": mime_type,
+            }
+        )
+    return parts
 
 
 def generate_scene_image(
@@ -214,56 +114,38 @@ def generate_scene_image(
     content_format: str = "long",
     project_id: str = "default",
     static_dir: str | None = None,
+    scene_number: int | None = None,
 ) -> dict:
-    refs = visual_references or []
-    generation_prompt = _build_generation_prompt(prompt, refs)
     static_dir = static_dir or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static")
+    generation_prompt = _build_generation_prompt(prompt, visual_references, content_format)
+    aspect_ratio = ASPECT_RATIOS.get(content_format, ASPECT_RATIOS["long"])
+    client = _gemini_client()
 
-    if REPLICATE_API_TOKEN and has_reference_images(refs):
-        try:
-            character_ref = _pick_reference(refs, "character")
-            if character_ref:
-                image_url = _generate_with_pulid(
-                    generation_prompt,
-                    character_ref,
-                    content_format,
-                    project_id,
-                    static_dir,
-                )
-                return {
-                    "imageUrl": image_url,
-                    "visualPrompt": generation_prompt,
-                    "source": "flux-pulid",
-                }
+    interaction = client.interactions.create(
+        model=GEMINI_IMAGE_MODEL,
+        input=_build_interaction_input(generation_prompt, visual_references, project_id, static_dir),
+        response_format={
+            "type": "image",
+            "mime_type": "image/jpeg",
+            "aspect_ratio": aspect_ratio,
+        },
+    )
 
-            env_ref = _pick_reference(refs, "environment") or _pick_reference(refs, "gadget")
-            if env_ref:
-                image_url = _generate_with_kontext(
-                    generation_prompt,
-                    env_ref,
-                    content_format,
-                    project_id,
-                    static_dir,
-                )
-                return {
-                    "imageUrl": image_url,
-                    "visualPrompt": generation_prompt,
-                    "source": "flux-kontext",
-                }
-        except Exception as exc:
-            print(f"FLUX generation failed, falling back to stock: {exc}")
+    output_image = interaction.output_image
+    if not output_image or not output_image.data:
+        raise RuntimeError("Gemini returned no scene image")
 
-    stock = search_pexels_photos(generation_prompt, visual_references=refs)
-    if stock:
-        first = stock[0]
-        return {
-            "imageUrl": first["imageUrl"],
-            "visualPrompt": first.get("visualPrompt") or generation_prompt,
-            "source": "stock",
-        }
+    image_bytes = base64.b64decode(output_image.data)
+    scene_suffix = scene_number or 1
+    image_url = save_generated_asset(
+        image_bytes,
+        f"scene-{scene_suffix}.jpg",
+        project_id,
+        static_dir,
+    )
 
     return {
-        "imageUrl": "",
+        "imageUrl": image_url,
         "visualPrompt": generation_prompt,
-        "source": "none",
+        "source": "gemini-nano-banana",
     }

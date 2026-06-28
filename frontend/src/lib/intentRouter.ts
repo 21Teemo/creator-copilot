@@ -195,6 +195,88 @@ export function buildStockSearchRequest(prompt: string) {
   return stockSearchBody(prompt);
 }
 
+export function buildStockVideoSearchRequest(prompt: string) {
+  return stockSearchBody(prompt);
+}
+
+export type SceneSearchSource = {
+  sceneNumber: number;
+  visualPrompt: string;
+};
+
+export type SceneStockItem = {
+  title: string;
+  url: string;
+};
+
+export type SceneStockBucket = {
+  sceneNumber: number;
+  query: string;
+  visualPrompt: string;
+  items: SceneStockItem[];
+  loading: boolean;
+  error?: string;
+};
+
+export async function searchStockPhotosForPrompt(
+  projectId: string,
+  visualPrompt: string
+): Promise<SceneStockItem[]> {
+  const prompt = visualPromptForStockSearch(visualPrompt);
+  const res = await apiRequest(projectId, "/stock/search", "POST", buildStockSearchRequest(prompt));
+  if (!Array.isArray(res)) return [];
+  return res.map((item: { visualPrompt?: string; imageUrl?: string }) => ({
+    title: item.visualPrompt || `Scene stock · ${prompt.slice(0, 40)}`,
+    url: item.imageUrl || "",
+  })).filter((item) => item.url);
+}
+
+export async function searchStockVideosForPrompt(
+  projectId: string,
+  visualPrompt: string
+): Promise<SceneStockItem[]> {
+  const prompt = visualPromptForStockSearch(visualPrompt);
+  const res = await apiRequest(projectId, "/stock/videos", "POST", buildStockVideoSearchRequest(prompt));
+  if (!Array.isArray(res)) return [];
+  return res.map((item: { visualPrompt?: string; videoUrl?: string }) => ({
+    title: item.visualPrompt || `Scene stock · ${prompt.slice(0, 40)}`,
+    url: item.videoUrl || "",
+  })).filter((item) => item.url);
+}
+
+export async function searchStockForScenes(
+  projectId: string,
+  scenes: SceneSearchSource[],
+  kind: "photo" | "video"
+): Promise<SceneStockBucket[]> {
+  const searchFn = kind === "photo" ? searchStockPhotosForPrompt : searchStockVideosForPrompt;
+  return Promise.all(
+    scenes.map(async (scene) => {
+      const query = visualPromptForStockSearch(scene.visualPrompt);
+      try {
+        const items = await searchFn(projectId, scene.visualPrompt);
+        return {
+          sceneNumber: scene.sceneNumber,
+          query,
+          visualPrompt: scene.visualPrompt,
+          items,
+          loading: false,
+        };
+      } catch (err) {
+        console.error(`Stock search failed for scene ${scene.sceneNumber}:`, err);
+        return {
+          sceneNumber: scene.sceneNumber,
+          query,
+          visualPrompt: scene.visualPrompt,
+          items: [],
+          loading: false,
+          error: "Search failed",
+        };
+      }
+    })
+  );
+}
+
 export function shouldUseAiSceneGeneration(): boolean {
   return useMediaStore
     .getState()
@@ -215,30 +297,48 @@ export function buildSceneGenerateRequest(prompt: string, sceneNumber?: number) 
   return sceneGenerateBody(prompt, sceneNumber);
 }
 
+export function buildSceneVideoGenerateRequest(prompt: string, sceneNumber?: number) {
+  return sceneGenerateBody(prompt, sceneNumber);
+}
+
 async function fetchSceneImage(
   projectId: string,
   prompt: string,
   sceneNumber: number
 ): Promise<{ sceneNumber: number; imageUrl: string; visualPrompt: string } | null> {
   const searchPrompt = visualPromptForStockSearch(prompt);
-
-  if (shouldUseAiSceneGeneration()) {
-    const res = await apiRequest(projectId, "/generate/scene", "POST", buildSceneGenerateRequest(searchPrompt, sceneNumber));
-    if (res?.imageUrl) {
-      return {
-        sceneNumber,
-        imageUrl: res.imageUrl,
-        visualPrompt: prompt,
-      };
-    }
-    return null;
-  }
-
-  const res = await apiRequest(projectId, "/stock/search", "POST", stockSearchBody(searchPrompt));
-  if (res?.[0]?.imageUrl) {
+  const res = await apiRequest(
+    projectId,
+    "/generate/scene",
+    "POST",
+    buildSceneGenerateRequest(searchPrompt, sceneNumber)
+  );
+  if (res?.imageUrl) {
     return {
       sceneNumber,
-      imageUrl: res[0].imageUrl,
+      imageUrl: res.imageUrl,
+      visualPrompt: prompt,
+    };
+  }
+  return null;
+}
+
+async function fetchSceneVideo(
+  projectId: string,
+  prompt: string,
+  sceneNumber: number
+): Promise<{ sceneNumber: number; videoUrl: string; visualPrompt: string } | null> {
+  const searchPrompt = visualPromptForStockSearch(prompt);
+  const res = await apiRequest(
+    projectId,
+    "/generate/scene/video",
+    "POST",
+    buildSceneVideoGenerateRequest(searchPrompt, sceneNumber)
+  );
+  if (res?.videoUrl) {
+    return {
+      sceneNumber,
+      videoUrl: res.videoUrl,
       visualPrompt: prompt,
     };
   }
@@ -400,16 +500,36 @@ export async function dispatchStudioAction(
         researchStore.setTrends(res);
         projectStore.setLastGeneratedFormat(currentFormat);
       } else if (currentView === "scenes") {
-        const mediaStore = useMediaStore.getState();
-        const res = await apiRequest(projectId, "/stock/search", "POST", stockSearchBody(`Refine keyframe scenes: ${prompt}`));
-        mediaStore.setSceneImages(res);
+        const scriptingStore = useScriptingStore.getState();
+        const storyboard = scriptingStore.storyboard;
+        if (storyboard.length > 0) {
+          const sceneImages: { sceneNumber: number; imageUrl: string; visualPrompt: string }[] = [];
+          for (const scene of storyboard) {
+            const image = await fetchSceneImage(
+              projectId,
+              `${scene.visualPrompt}. ${prompt}`,
+              scene.sceneNumber
+            );
+            if (image) sceneImages.push(image);
+          }
+          useMediaStore.getState().setSceneImages(sceneImages);
+        }
         projectStore.setLastGeneratedFormat(currentFormat);
       } else if (currentView === "video") {
-        const mediaStore = useMediaStore.getState();
-        const res = await apiRequest(projectId, "/stock/videos", "POST", {
-          prompt: `Refine scene video clips: ${prompt}`,
-        });
-        mediaStore.setSceneVideos(res);
+        const scriptingStore = useScriptingStore.getState();
+        const storyboard = scriptingStore.storyboard;
+        if (storyboard.length > 0) {
+          const sceneVideos: { sceneNumber: number; videoUrl: string; visualPrompt: string }[] = [];
+          for (const scene of storyboard) {
+            const video = await fetchSceneVideo(
+              projectId,
+              `${scene.visualPrompt}. ${prompt}`,
+              scene.sceneNumber
+            );
+            if (video) sceneVideos.push(video);
+          }
+          useMediaStore.getState().setSceneVideos(sceneVideos);
+        }
         projectStore.setLastGeneratedFormat(currentFormat);
       }
     } catch (err) {
@@ -492,25 +612,20 @@ export async function dispatchStudioAction(
           useMediaStore.getState().setSceneImages(sceneImages);
         } else {
           const searchPrompt = visualPromptForStockSearch(prompt);
-          if (shouldUseAiSceneGeneration()) {
-            const res = await apiRequest(
-              projectId,
-              "/generate/scene",
-              "POST",
-              buildSceneGenerateRequest(searchPrompt, 1)
-            );
-            if (res?.imageUrl) {
-              useMediaStore.getState().setSceneImages([
-                {
-                  sceneNumber: 1,
-                  imageUrl: res.imageUrl,
-                  visualPrompt: prompt,
-                },
-              ]);
-            }
-          } else {
-            const res = await apiRequest(projectId, "/stock/search", "POST", stockSearchBody(searchPrompt));
-            useMediaStore.getState().setSceneImages(res);
+          const res = await apiRequest(
+            projectId,
+            "/generate/scene",
+            "POST",
+            buildSceneGenerateRequest(searchPrompt, 1)
+          );
+          if (res?.imageUrl) {
+            useMediaStore.getState().setSceneImages([
+              {
+                sceneNumber: 1,
+                imageUrl: res.imageUrl,
+                visualPrompt: prompt,
+              },
+            ]);
           }
         }
         projectStore.setLastGeneratedFormat(currentFormat);
@@ -518,8 +633,34 @@ export async function dispatchStudioAction(
       }
       case "scene_videos": {
         studioStore.setActiveView("video");
-        const res = await apiRequest(projectId, "/stock/videos", "POST", { prompt });
-        useMediaStore.getState().setSceneVideos(res);
+        const scriptingStore = useScriptingStore.getState();
+        const storyboard = scriptingStore.storyboard;
+
+        if (storyboard.length > 0) {
+          const sceneVideos: { sceneNumber: number; videoUrl: string; visualPrompt: string }[] = [];
+          for (const scene of storyboard) {
+            const video = await fetchSceneVideo(projectId, scene.visualPrompt, scene.sceneNumber);
+            if (video) sceneVideos.push(video);
+          }
+          useMediaStore.getState().setSceneVideos(sceneVideos);
+        } else {
+          const searchPrompt = visualPromptForStockSearch(prompt);
+          const res = await apiRequest(
+            projectId,
+            "/generate/scene/video",
+            "POST",
+            buildSceneVideoGenerateRequest(searchPrompt, 1)
+          );
+          if (res?.videoUrl) {
+            useMediaStore.getState().setSceneVideos([
+              {
+                sceneNumber: 1,
+                videoUrl: res.videoUrl,
+                visualPrompt: prompt,
+              },
+            ]);
+          }
+        }
         projectStore.setLastGeneratedFormat(currentFormat);
         break;
       }

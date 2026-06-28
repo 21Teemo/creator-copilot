@@ -11,6 +11,7 @@ from celery.result import AsyncResult
 
 from media.services.stock import search_pexels_photos, search_pexels_videos
 from media.services.image_gen import generate_scene_image
+from media.services.video_gen import generate_scene_video
 from media.futures.render_tasks import celery_app, render_video
 from media.config import (
     CLOUDINARY_CLOUD_NAME,
@@ -144,22 +145,49 @@ async def get_stock_photos(projectId: str, payload: SearchPayload):
 async def generate_scene_picture(projectId: str, payload: SceneGeneratePayload):
     refs = [r.model_dump() for r in (payload.visualReferences or [])]
     static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-    result = generate_scene_image(
-        prompt=payload.prompt,
-        visual_references=refs,
-        content_format=payload.contentFormat or "long",
-        project_id=projectId,
-        static_dir=static_dir,
-    )
+    try:
+        result = generate_scene_image(
+            prompt=payload.prompt,
+            visual_references=refs,
+            content_format=payload.contentFormat or "long",
+            project_id=projectId,
+            static_dir=static_dir,
+            scene_number=payload.sceneNumber,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     if payload.sceneNumber is not None:
         result["sceneNumber"] = payload.sceneNumber
     if not result.get("imageUrl"):
         raise HTTPException(status_code=502, detail="Scene image generation returned no image")
     return result
 
+
+@router.post("/generate/scene/video")
+async def generate_scene_video_clip(projectId: str, payload: SceneGeneratePayload):
+    refs = [r.model_dump() for r in (payload.visualReferences or [])]
+    static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+    try:
+        result = generate_scene_video(
+            prompt=payload.prompt,
+            visual_references=refs,
+            content_format=payload.contentFormat or "long",
+            project_id=projectId,
+            static_dir=static_dir,
+            scene_number=payload.sceneNumber,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if payload.sceneNumber is not None:
+        result["sceneNumber"] = payload.sceneNumber
+    if not result.get("videoUrl"):
+        raise HTTPException(status_code=502, detail="Scene video generation returned no video")
+    return result
+
 @router.post("/stock/videos")
 async def get_stock_videos(projectId: str, payload: SearchPayload):
-    videos = search_pexels_videos(payload.prompt)
+    refs = [r.model_dump() for r in (payload.visualReferences or [])]
+    videos = search_pexels_videos(payload.prompt, visual_references=refs)
     return videos
 
 @router.post("/upload", response_model=UploadResponse)

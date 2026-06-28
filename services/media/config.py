@@ -8,8 +8,19 @@ load_dotenv(dotenv_path=env_path)
 
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
 REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_IMAGE_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
+GEMINI_VIDEO_MODEL = os.getenv("GEMINI_VIDEO_MODEL", "veo-3.1-fast-generate-preview")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 ELEVEN_LABS_API_KEY = os.getenv("ELEVEN_LABS_API_KEY", "")
+# Expressive narration defaults — override in services/.env
+ELEVEN_LABS_VOICE_ID = os.getenv("ELEVEN_LABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb")  # George — warm storyteller
+ELEVEN_LABS_MODEL_ID = os.getenv("ELEVEN_LABS_MODEL_ID", "eleven_multilingual_v2")
+ELEVEN_LABS_STABILITY = float(os.getenv("ELEVEN_LABS_STABILITY", "0.32"))
+ELEVEN_LABS_SIMILARITY_BOOST = float(os.getenv("ELEVEN_LABS_SIMILARITY_BOOST", "0.78"))
+ELEVEN_LABS_STYLE = float(os.getenv("ELEVEN_LABS_STYLE", "0.42"))
+ELEVEN_LABS_SPEED = float(os.getenv("ELEVEN_LABS_SPEED", "1.0"))
+ELEVEN_LABS_OUTPUT_FORMAT = os.getenv("ELEVEN_LABS_OUTPUT_FORMAT", "mp3_44100_128")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 # Optional cloud asset storage (checked in priority order)

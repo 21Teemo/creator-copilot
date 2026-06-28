@@ -74,16 +74,25 @@ Endpoints are grouped below by **creator workflow stage**.
 
 `POST /api/v1/projects/:projectId/stock/videos`
 
-- Searches stock video libraries (Pexels, Pixabay) for video clips matching project context
-
-### Scene Image Generation (FLUX img2img)
+### Scene Image Generation (Gemini Nano Banana)
 
 `POST /api/v1/projects/:projectId/generate/scene`
 
-- When visual reference images are uploaded, generates scene frames via Replicate:
-  - **Character ref** → `bytedance/flux-pulid` (identity lock)
-  - **Environment/gadget ref** → `black-forest-labs/flux-kontext-dev` (img2img)
-- Falls back to Pexels stock search if `REPLICATE_API_TOKEN` is unset or generation fails
+- Generates scene frames via Gemini **Nano Banana** (`gemini-2.5-flash-image` by default)
+- Optional visual reference images are passed into the interaction for consistency
+- Saves JPEGs to project static storage; returns a proxied `/media/static/...` URL
+
+### Scene Video Generation (Gemini Veo)
+
+`POST /api/v1/projects/:projectId/generate/scene/video`
+
+- Generates per-scene video clips via **Veo** (`veo-3.1-fast-generate-preview` by default)
+- Async poll on the media service; can take several minutes per scene
+- Saves MP4s to project static storage
+
+### Stock search (optional manual override)
+
+`POST /api/v1/projects/:projectId/stock/search` and `/stock/videos` remain for optional manual stock search in the gallery UI — not used by the Scene Pictures / Scene Videos pipeline.
 - Body: `{ prompt, sceneNumber?, visualReferences?, contentFormat? }`
 
 ### Thumbnail Builder (FLUX / Imagen)
@@ -158,7 +167,8 @@ VO synthesis integrated in the render pipeline (ElevenLabs API).
 | 2 | POST | `/scripting/storyboard` | No |
 | 2 | POST | `/thumbnails/:assetId/grade` | No |
 | 3 | POST | `/stock/search` | No |
-| 3 | POST | `/generate/scene` | No (FLUX PuLID/Kontext when visual refs uploaded) |
+| 3 | POST | `/generate/scene` | Yes (`GEMINI_API_KEY`) |
+| 3 | POST | `/generate/scene/video` | Yes (`GEMINI_API_KEY`, billed Veo) |
 | 3 | POST | `/stock/videos` | No |
 | 3 | POST | `/video/render` | **Yes** (Celery) |
 | 3 | GET | `/video/render/:taskId/status` | — (poll) |

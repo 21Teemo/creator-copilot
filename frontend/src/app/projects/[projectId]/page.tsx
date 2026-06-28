@@ -77,8 +77,8 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       hasData = !!useScriptingStore.getState().script;
       if (hasData) useStudioStore.getState().setActiveView("script");
     } else if (action === "scene_pictures") {
-      hasData = useMediaStore.getState().sceneImages.length > 0;
-      if (hasData) useStudioStore.getState().setActiveView("scenes");
+      useStudioStore.getState().setActiveView("scenes");
+      return;
     } else if (action === "scene_videos") {
       hasData = useMediaStore.getState().sceneVideos.length > 0;
       if (hasData) useStudioStore.getState().setActiveView("video");
@@ -97,8 +97,8 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       explore_trends: "Scanning for trending topics in my niche...",
       fact_finder: "Performing fact-checking and compiling article briefs...",
       write_script: "Drafting script narration and storyboard outlines...",
-      scene_pictures: "Generating scene frames (FLUX identity lock when references are set)...",
-      scene_videos: "Generating custom video clips for each scene...",
+      scene_pictures: "Generating scene frames with Gemini Nano Banana...",
+      scene_videos: "Generating scene videos with Gemini Veo (this can take a few minutes per scene)...",
       ffmpeg_render: "Rendering final video compilation using FFmpeg render CLI...",
       seo_publish: "Optimizing metadata titles and chapter timestamps...",
     };
