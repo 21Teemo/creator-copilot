@@ -34,6 +34,8 @@ DUCKING_ATTACK = float(os.getenv("RENDER_DUCKING_ATTACK", "0.005"))
 DUCKING_RELEASE = float(os.getenv("RENDER_DUCKING_RELEASE", "0.3"))
 DUCKING_KNEE = float(os.getenv("RENDER_DUCKING_KNEE", "0.5"))
 AUDIO_SAMPLE_RATE = int(os.getenv("RENDER_AUDIO_SAMPLE_RATE", "44100"))
+LUT_PATH = os.getenv("RENDER_LUT_PATH", "").strip()
+UNSHARP_PARAMS = os.getenv("RENDER_UNSHARP_PARAMS", "").strip()
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,21 @@ class RenderProfile:
     static_image_bg: bool
     crossfade_sec: float
     segmented: bool
+    video_filters: str | None = None
+
+
+def _build_video_filters() -> str | None:
+    """Combine LUT + unsharp into a single FFmpeg -vf chain (applied per segment encode)."""
+    filters: list[str] = []
+    if LUT_PATH:
+        if os.path.isfile(LUT_PATH):
+            lut_path = LUT_PATH.replace("\\", "/").replace(":", "\\:")
+            filters.append(f"lut3d={lut_path}")
+        else:
+            logger.warning("RENDER_LUT_PATH set but file not found: %s", LUT_PATH)
+    if UNSHARP_PARAMS:
+        filters.append(f"unsharp={UNSHARP_PARAMS}")
+    return ",".join(filters) if filters else None
 
 
 def get_render_profile(content_format: str, quality: str | None = None) -> RenderProfile:
@@ -57,6 +74,7 @@ def get_render_profile(content_format: str, quality: str | None = None) -> Rende
     codec = os.getenv("RENDER_CODEC", "libx264").strip()
     threads = int(os.getenv("RENDER_THREADS", str(os.cpu_count() or 4)))
     segmented = os.getenv("RENDER_SEGMENTED", "true").lower() in {"1", "true", "yes"}
+    video_filters = _build_video_filters()
 
     if quality == "fast":
         target_w, target_h = (480, 854) if is_short else (854, 480)
@@ -73,6 +91,7 @@ def get_render_profile(content_format: str, quality: str | None = None) -> Rende
             static_image_bg=True,
             crossfade_sec=float(os.getenv("RENDER_CROSSFADE_SEC", "0.15")),
             segmented=segmented,
+            video_filters=video_filters,
         )
 
     if quality == "quality":
@@ -90,6 +109,7 @@ def get_render_profile(content_format: str, quality: str | None = None) -> Rende
             static_image_bg=True,
             crossfade_sec=float(os.getenv("RENDER_CROSSFADE_SEC", "0.45")),
             segmented=segmented,
+            video_filters=video_filters,
         )
 
     target_w, target_h = (720, 1280) if is_short else (1280, 720)
@@ -106,6 +126,7 @@ def get_render_profile(content_format: str, quality: str | None = None) -> Rende
         static_image_bg=True,
         crossfade_sec=CROSSFADE_SECONDS,
         segmented=segmented,
+        video_filters=video_filters,
     )
 
 
@@ -132,7 +153,7 @@ def write_render_output(
 ) -> None:
     duration = getattr(clip, "duration", None)
     logger.info(
-        "FFmpeg encode start [%s] → %s (%.1fs clip, %dx%d, %s, threads=%d)",
+        "FFmpeg encode start [%s] → %s (%.1fs clip, %dx%d, %s, threads=%d%s)",
         label,
         output_path,
         duration or 0,
@@ -140,13 +161,17 @@ def write_render_output(
         profile.target_h,
         profile.codec,
         profile.threads,
+        f", vf={profile.video_filters}" if profile.video_filters else "",
     )
     started = time.monotonic()
+    ffmpeg_params = list(profile.ffmpeg_params)
+    if profile.video_filters:
+        ffmpeg_params.extend(["-vf", profile.video_filters])
     write_kwargs: dict = {
         "fps": profile.fps,
         "codec": profile.codec,
         "threads": profile.threads,
-        "ffmpeg_params": list(profile.ffmpeg_params),
+        "ffmpeg_params": ffmpeg_params,
         "logger": None,
     }
     if getattr(clip, "audio", None) is not None:
