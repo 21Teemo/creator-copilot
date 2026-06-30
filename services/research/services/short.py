@@ -2,6 +2,7 @@ import os
 import re
 import asyncio
 import concurrent.futures
+import unicodedata
 from datetime import datetime
 from typing import Optional, List
 
@@ -67,25 +68,46 @@ def _is_tiktok_video_id(video_id: Optional[str]) -> bool:
     return bool(video_id and str(video_id).isdigit() and len(str(video_id)) >= 15)
 
 
-def _slugify_tiktok_tag(query: str) -> str:
+def _slugify_tiktok_tag(query: str, keep_accents: bool = True) -> str:
     cleaned = re.sub(r"\b20\d{2}\b", "", query.lower())
-    return re.sub(r"[^a-z0-9]", "", cleaned)
+    if keep_accents:
+        slug = re.sub(r"[^\w]", "", cleaned, flags=re.UNICODE)
+        return slug.replace("_", "")
+    normalized = unicodedata.normalize("NFKD", cleaned)
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]", "", ascii_text)
 
 
 def _tiktok_tag_candidates(query: str) -> List[str]:
     cleaned = re.sub(r"\b20\d{2}\b", "", query.lower())
-    words = re.findall(r"[a-z0-9]+", cleaned)
+    words = re.findall(r"[^\s]+", cleaned, flags=re.UNICODE)
 
     candidates: List[str] = []
-    full_slug = _slugify_tiktok_tag(query)
-    if full_slug:
-        candidates.append(full_slug)
+
+    full_with_accents = _slugify_tiktok_tag(query, keep_accents=True)
+    if full_with_accents:
+        candidates.append(full_with_accents)
+
+    full_ascii = _slugify_tiktok_tag(query, keep_accents=False)
+    if full_ascii and full_ascii != full_with_accents:
+        candidates.append(full_ascii)
+
     if len(words) >= 2:
         two_word = "".join(words[:2])
-        if two_word not in candidates:
-            candidates.append(two_word)
-    if words and words[0] not in candidates:
-        candidates.append(words[0])
+        two_word_slug = _slugify_tiktok_tag(two_word, keep_accents=True)
+        if two_word_slug and two_word_slug not in candidates:
+            candidates.append(two_word_slug)
+        two_word_ascii = _slugify_tiktok_tag(two_word, keep_accents=False)
+        if two_word_ascii and two_word_ascii not in candidates:
+            candidates.append(two_word_ascii)
+
+    if words:
+        first = _slugify_tiktok_tag(words[0], keep_accents=True)
+        if first and first not in candidates:
+            candidates.append(first)
+        first_ascii = _slugify_tiktok_tag(words[0], keep_accents=False)
+        if first_ascii and first_ascii not in candidates:
+            candidates.append(first_ascii)
 
     return candidates or ["fyp"]
 

@@ -1,5 +1,7 @@
 import yt_dlp
 import concurrent.futures
+import re
+import unicodedata
 from datetime import datetime
 from typing import Optional, List
 
@@ -16,6 +18,45 @@ from research.services.common import (
     format_duration,
     format_published_at
 )
+
+def _ascii_fold(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text)
+    return normalized.encode("ascii", "ignore").decode("ascii")
+
+
+def _youtube_search_variants(raw_query: str, rewritten_query: str) -> List[str]:
+    """Build ordered YouTube search strings — preserve language, try accent + ASCII forms."""
+    variants: List[str] = []
+
+    def add(value: str) -> None:
+        cleaned = re.sub(r"\s+", " ", (value or "").strip())
+        if cleaned and cleaned not in variants:
+            variants.append(cleaned)
+
+    add(rewritten_query)
+    add(raw_query)
+    add(_ascii_fold(rewritten_query))
+    if raw_query != rewritten_query:
+        add(_ascii_fold(raw_query))
+
+    return variants
+
+
+def _run_yt_flat_search(search_query: str) -> list:
+    ydl_opts_flat = {
+        "quiet": True,
+        "extract_flat": True,
+        "skip_download": True,
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts_flat) as ydl:
+            info = ydl.extract_info(search_query, download=False)
+            if "entries" in info:
+                return info["entries"] or []
+    except Exception as e:
+        print(f"Error running flat search for long videos: {e}")
+    return []
+
 
 def _process_single_long_candidate(entry: dict, min_views: int) -> Optional[dict]:
     video_id = entry.get("id")
@@ -129,34 +170,34 @@ def fetch_long_trends(
         except Exception as e:
             print(f"Error resolving YouTube URL title: {e}")
 
-    if actual_query and actual_query.strip():
-        actual_query = rewrite_to_youtube_search(actual_query, is_short=False)
-
-    # Build search query for long-form
-    search_limit = 50
-    if not actual_query or actual_query.strip() == "":
-        search_query = f"trending {current_year}"
+    raw_query = (actual_query or "").strip()
+    if raw_query:
+        rewritten_query = rewrite_to_youtube_search(raw_query, is_short=False)
     else:
-        year_suffix = f" {current_year}" if str(current_year) not in actual_query else ""
-        search_query = f"ytsearch{search_limit}:{actual_query}{year_suffix}"
+        rewritten_query = ""
 
-    print(f"Executing Long-form YouTube search query: '{search_query}'")
-
-    # Flat extraction
-    ydl_opts_flat = {
-        'quiet': True,
-        'extract_flat': True,
-        'skip_download': True,
-    }
+    search_limit = 50
+    current_year = now.year
+    search_variants = _youtube_search_variants(raw_query, rewritten_query)
 
     candidate_entries = []
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts_flat) as ydl:
-            info = ydl.extract_info(search_query, download=False)
-            if 'entries' in info:
-                candidate_entries = info['entries']
-    except Exception as e:
-        print(f"Error running flat search for long videos: {e}")
+    used_search_query = ""
+    for variant in search_variants or [""]:
+        if not variant:
+            used_search_query = f"trending {current_year}"
+            search_query = f"ytsearch{search_limit}:{used_search_query}"
+        else:
+            year_suffix = f" {current_year}" if str(current_year) not in variant else ""
+            used_search_query = f"{variant}{year_suffix}"
+            search_query = f"ytsearch{search_limit}:{used_search_query}"
+
+        print(f"Executing Long-form YouTube search query: '{search_query}'")
+        candidate_entries = _run_yt_flat_search(search_query)
+        if candidate_entries:
+            actual_query = used_search_query
+            break
+    else:
+        actual_query = rewritten_query or raw_query or f"trending {current_year}"
 
     # Pre-filter at flat level
     valid_candidates = []

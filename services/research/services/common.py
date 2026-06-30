@@ -84,12 +84,17 @@ Rules:
 2. Focus on the core subject + action + mood/vibe (what performs on TikTok FYP).
 3. Keep it under 6 words (TikTok search favors punchy niche keywords).
 4. Do NOT append years or dates — TikTok hashtags are timeless (e.g. "funnycats" not "funnycats 2026").
-5. Output ONLY the pure search string. No explanations, quotes, hashtags, or formatting.
-6. Do not append country names or region tags unless the user explicitly mentions a location.
+5. Preserve the user's original language. Do NOT translate. If the user writes in Spanish, keep Spanish words.
+   Only translate if the user explicitly asks for English results.
+6. For non-English queries, keep special characters (accents, ñ, etc.) — they are important for correct hashtags.
+7. Output ONLY the pure search string. No explanations, quotes, hashtags, or formatting.
+8. Do not append country names or region tags unless the user explicitly mentions a location.
 
 Example 1: User: "Funny moments with dogs and cats" -> Output: funny cats fails
 Example 2: User: "POV storytime drama" -> Output: POV storytime drama
 Example 3: User: "Satisfying cooking clips" -> Output: satisfying cooking ASMR
+Example 4: User: "Día de Muertos" -> Output: Día de Muertos
+Example 5: User: "ricette italiane" -> Output: ricette italiane
 """
         try:
             response = model.generate_content(f"{system_prompt}\n\nUser request: {normalized}")
@@ -139,12 +144,17 @@ Rules:
 2. Focus on the core subject + action + mood/vibe.
 3. Keep it under 7 words (YouTube prioritizes short, sharp keywords).
 4. If a specific year is not mentioned, naturally append "{current_year}" for recency.
-5. Output ONLY the pure search string. No explanations, quotes, or formatting.
-6. Do not append country names or region tags unless the user explicitly mentions a location.
+5. Preserve the user's original language. Do NOT translate. If the user writes in Spanish, keep Spanish words.
+   Only translate if the user explicitly asks for English results.
+6. For non-English queries, keep special characters (accents, ñ, etc.) — they help YouTube match the right videos.
+7. Output ONLY the pure search string. No explanations, quotes, or formatting.
+8. Do not append country names or region tags unless the user explicitly mentions a location.
 
 Example 1: User: "I need cool background music for my travel vlog" -> Output: travel vlog background music {current_year}
 Example 2: User: "Funny moments with dogs and cats" -> Output: funny dogs cats compilation
 Example 3: User: "How to make money online as a student" -> Output: make money online student {current_year}
+Example 4: User: "Día de Muertos" -> Output: Día de Muertos {current_year}
+Example 5: User: "ricette italiane" -> Output: ricette italiane {current_year}
 """
         try:
             response = model.generate_content(f"{system_prompt}\n\nUser request: {normalized}")
