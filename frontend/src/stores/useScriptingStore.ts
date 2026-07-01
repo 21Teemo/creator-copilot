@@ -10,6 +10,9 @@ export interface StoryboardScene {
   sceneNumber: number;
   visualPrompt: string;
   narrationText: string;
+  environment?: string;
+  character?: string;
+  gadgets?: string;
 }
 
 export interface ThumbnailConcept {
@@ -157,23 +160,60 @@ export const VISUAL_STYLES: VisualStyle[] = [
   }
 ];
 
+export type ValueLensId = "auto" | "emotional" | "educational" | "interactive";
+
+export const VALUE_LENSES: {
+  id: ValueLensId;
+  label: string;
+  shortLabel: string;
+  hint: string;
+}[] = [
+  { id: "auto", label: "Auto Lens", shortLabel: "Auto", hint: "AI picks the best value lens" },
+  {
+    id: "emotional",
+    label: "Lens A — Emotional",
+    shortLabel: "Emotional",
+    hint: "Vulnerability, intimacy, sensory feeling",
+  },
+  {
+    id: "educational",
+    label: "Lens B — Educational",
+    shortLabel: "Educational",
+    hint: "How-to, history, culture, practical utility",
+  },
+  {
+    id: "interactive",
+    label: "Lens C — Interactive",
+    shortLabel: "Interactive",
+    hint: "Questions, audience choice, direct participation",
+  },
+];
+
 interface ScriptingState {
   script: string;
   outline: OutlineItem[];
   storyboard: StoryboardScene[];
   thumbnailConcepts: ThumbnailConcept[];
   selectedStyle: string;
+  storytellingEnabled: boolean;
+  valueLens: ValueLensId;
+  linkedBriefFingerprint: string | null;
   setScript: (script: string) => void;
   updateScript: (script: string) => void;
   setOutline: (outline: OutlineItem[]) => void;
   setStoryboard: (storyboard: StoryboardScene[]) => void;
   updateStoryboardScene: (
     sceneNumber: number,
-    updates: Partial<Pick<StoryboardScene, "visualPrompt" | "narrationText">>
+    updates: Partial<
+      Pick<StoryboardScene, "visualPrompt" | "narrationText" | "environment" | "character" | "gadgets">
+    >
   ) => void;
   setThumbnailConcepts: (concepts: ThumbnailConcept[]) => void;
   updateThumbnailConceptGrade: (id: string, ctrScore: number, feedback: string) => void;
   setSelectedStyle: (styleId: string) => void;
+  setStorytellingEnabled: (enabled: boolean) => void;
+  setValueLens: (lens: ValueLensId) => void;
+  setLinkedBriefFingerprint: (fingerprint: string | null) => void;
   clearScripting: () => void;
 }
 
@@ -183,6 +223,9 @@ export const useScriptingStore = create<ScriptingState>()((set) => ({
   storyboard: [],
   thumbnailConcepts: [],
   selectedStyle: "default",
+  storytellingEnabled: false,
+  valueLens: "auto",
+  linkedBriefFingerprint: null,
   setScript: (script) => {
     set((state) => {
       const sceneRegex = /\[Scene\s+(\d+)\s*-\s*Visual:\s*([\s\S]*?)\]/gi;
@@ -275,6 +318,9 @@ export const useScriptingStore = create<ScriptingState>()((set) => ({
       return { selectedStyle: styleId, storyboard: updatedStoryboard };
     });
   },
+  setStorytellingEnabled: (storytellingEnabled) => set({ storytellingEnabled }),
+  setValueLens: (valueLens) => set({ valueLens }),
+  setLinkedBriefFingerprint: (linkedBriefFingerprint) => set({ linkedBriefFingerprint }),
   clearScripting: () =>
     set({
       script: "",
@@ -282,5 +328,8 @@ export const useScriptingStore = create<ScriptingState>()((set) => ({
       storyboard: [],
       thumbnailConcepts: [],
       selectedStyle: "default",
+      storytellingEnabled: false,
+      valueLens: "auto",
+      linkedBriefFingerprint: null,
     }),
 }));

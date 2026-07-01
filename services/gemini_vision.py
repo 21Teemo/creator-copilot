@@ -39,6 +39,35 @@ def analyze_image(prompt: str, image_part: dict) -> str:
     return (response.text or "").strip()
 
 
+_REFERENCE_CATEGORY_PROMPTS = {
+    "environment": (
+        "Describe this image as a production reference for ENVIRONMENT/SETTING. "
+        "Include location, architecture, lighting, color palette, time of day, and mood. "
+        "Be specific and concise (max 100 words). Plain text only."
+    ),
+    "character": (
+        "Describe this image as a production reference for CHARACTER APPEARANCE. "
+        "Include age range, presentation, hair, wardrobe, skin tone, and distinguishing features. "
+        "Be specific and concise (max 100 words). Plain text only."
+    ),
+    "gadget": (
+        "Describe this image as a production reference for GADGET/PROP. "
+        "Include object type, color, material, size, and distinguishing details. "
+        "Be specific and concise (max 80 words). Plain text only."
+    ),
+}
+
+
+def analyze_reference_image(category: str, label: str, image_part: dict) -> str:
+    cat = (category or "character").strip().lower()
+    if cat == "gadgets":
+        cat = "gadget"
+    prompt = _REFERENCE_CATEGORY_PROMPTS.get(cat, _REFERENCE_CATEGORY_PROMPTS["character"])
+    if label.strip():
+        prompt += f" User label for context: {label.strip()}"
+    return analyze_image(prompt, image_part)
+
+
 def grade_image(prompt: str, image_part: dict) -> dict:
     model = _vision_model()
     if not model:

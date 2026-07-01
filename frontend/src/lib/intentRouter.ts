@@ -111,8 +111,28 @@ function referenceKeywords(): string {
     .join(", ");
 }
 
+function researchBriefFingerprint(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  let hash = 0;
+  for (let i = 0; i < trimmed.length; i++) {
+    hash = (Math.imul(31, hash) + trimmed.charCodeAt(i)) | 0;
+  }
+  return `${trimmed.length}:${hash}`;
+}
+
+export function isScriptStaleForBrief(): boolean {
+  const brief = useResearchStore.getState().summaries?.summaryText?.trim() || "";
+  if (!brief) return false;
+  const { script, linkedBriefFingerprint } = useScriptingStore.getState();
+  if (!script?.trim()) return false;
+  return researchBriefFingerprint(brief) !== linkedBriefFingerprint;
+}
+
 function buildScriptPayload(userPrompt: string, contentFormat: ContentFormat) {
   const { summaries, activeTrend } = useResearchStore.getState();
+  const { storytellingEnabled, valueLens } = useScriptingStore.getState();
+  const researchBrief = summaries?.summaryText?.trim() || "";
   const topic =
     stripHashtagsAndMentions(activeTrend?.title || "") ||
     stripHashtagsAndMentions(
@@ -122,15 +142,20 @@ function buildScriptPayload(userPrompt: string, contentFormat: ContentFormat) {
     ) ||
     userPrompt.trim().slice(0, 80);
 
-  const creativeAngle = summaries?.summaryText ? extractCreativeAngle(summaries.summaryText) : "";
+  const creativeAngle =
+    researchBrief && researchBrief.length > 200 ? "" : extractCreativeAngle(researchBrief);
 
   const rawVisual = (summaries?.visualAnalysis || activeTrend?.visualAnalysis || "").trim();
   const visualStyleNotes = isPlaceholderVisualAnalysis(rawVisual) ? "" : rawVisual.slice(0, 400);
 
+  const defaultTask = researchBrief
+    ? "Replicate the reference video's structure shot-for-shot from the RESEARCH BRIEF. Match scene count, framing, pacing, emotional arc, and audio format exactly. Use empty narration when the brief specifies no voiceover."
+    : "Plan 3-5 scenes. visualPrompt = standalone image search prompt per scene. narrationText = short voiceover line when voiceover fits the format.";
+
   const task =
     userPrompt.trim() && !userPrompt.startsWith("Drafting script")
       ? userPrompt
-      : "Plan 3-5 scenes. visualPrompt = standalone image search prompt per scene. narrationText = short voiceover line. Do not repeat the research brief.";
+      : defaultTask;
 
   return {
     topic,
@@ -139,6 +164,9 @@ function buildScriptPayload(userPrompt: string, contentFormat: ContentFormat) {
     visualReferences: getVisualReferencesPayload(),
     contentFormat,
     prompt: task,
+    storytellingEnabled,
+    valueLens: storytellingEnabled ? valueLens : "auto",
+    researchBrief: researchBrief.slice(0, 8000),
   };
 }
 
@@ -161,13 +189,27 @@ function sanitizeVisualPromptText(text: string): string {
   return t.replace(/\s{2,}/g, " ").trim().slice(0, 220);
 }
 
+function sanitizeConsistencyField(text: string): string {
+  return (text || "").replace(/https?:\/\/\S+/g, "").replace(/\s{2,}/g, " ").trim().slice(0, 400);
+}
+
 function sanitizeStoryboardScenes(
-  scenes: { sceneNumber: number; visualPrompt: string; narrationText: string }[]
+  scenes: {
+    sceneNumber: number;
+    visualPrompt: string;
+    narrationText: string;
+    environment?: string;
+    character?: string;
+    gadgets?: string;
+  }[]
 ) {
   return scenes.map((scene) => ({
     ...scene,
     visualPrompt: sanitizeVisualPromptText(scene.visualPrompt),
     narrationText: sanitizeNarrationText(scene.narrationText),
+    environment: sanitizeConsistencyField(scene.environment || ""),
+    character: sanitizeConsistencyField(scene.character || ""),
+    gadgets: sanitizeConsistencyField(scene.gadgets || ""),
   }));
 }
 
@@ -492,6 +534,10 @@ export async function dispatchStudioAction(
         const scriptingStore = useScriptingStore.getState();
         const res = await apiRequest(projectId, "/scripting/storyboard", "POST", {
           prompt: `Refine current script with instructions: ${prompt}. Current script: ${scriptingStore.script}`,
+          storytellingEnabled: scriptingStore.storytellingEnabled,
+          valueLens: scriptingStore.storytellingEnabled ? scriptingStore.valueLens : "auto",
+          researchBrief: useResearchStore.getState().summaries?.summaryText?.trim().slice(0, 8000) || "",
+          visualReferences: getVisualReferencesPayload(),
         });
         scriptingStore.setScript(res.script);
         scriptingStore.setStoryboard(res.storyboard);
@@ -554,6 +600,7 @@ export async function dispatchStudioAction(
 
   // Standard Pipeline Routing
   studioStore.setLoading(true);
+  studioStore.setActionError(null);
   
   try {
     switch (action) {
@@ -589,6 +636,8 @@ export async function dispatchStudioAction(
           thumbnailUrl: trend?.thumbnailUrl,
           visualAnalysis: brief.visualAnalysis || trend?.visualAnalysis,
         });
+        useScriptingStore.getState().clearScripting();
+        useMediaStore.getState().clearMedia();
         projectStore.setLastGeneratedFormat(currentFormat);
         break;
       }
@@ -601,12 +650,22 @@ export async function dispatchStudioAction(
         const scriptPayload = buildScriptPayload(prompt, currentFormat);
         const res = await apiRequest(projectId, "/scripting/storyboard", "POST", scriptPayload);
         const storyboard = sanitizeStoryboardScenes(res.storyboard || []);
+        if (storyboard.length === 0) {
+          throw new Error(
+            "Write Script returned no scenes. Check DEEPSEEK_API_KEY in services/.env and that the scripting service is running on port 8002."
+          );
+        }
         const script =
           sanitizeNarrationText(res.script) ||
           storyboard.map((s) => s.narrationText).filter(Boolean).join("\n\n");
         useScriptingStore.getState().setStoryboard(storyboard);
         useScriptingStore.getState().setOutline(res.outline || []);
         useScriptingStore.getState().setScript(script);
+        useScriptingStore
+          .getState()
+          .setLinkedBriefFingerprint(
+            researchBriefFingerprint(useResearchStore.getState().summaries?.summaryText || "")
+          );
         projectStore.setLastGeneratedFormat(currentFormat);
         break;
       }
@@ -680,7 +739,23 @@ export async function dispatchStudioAction(
         studioStore.setActiveView("ffmpeg");
         const mediaStore = useMediaStore.getState();
         const scriptingStore = useScriptingStore.getState();
-        
+
+        if (scriptingStore.storyboard.length === 0) {
+          throw new Error("No storyboard scenes to render — run Write Script first.");
+        }
+
+        const inlineClips = mediaStore.sceneVideos.filter((v) =>
+          v.videoUrl?.startsWith("data:")
+        );
+        if (inlineClips.length > 0) {
+          throw new Error(
+            `${inlineClips.length} clip(s) were uploaded as inline data and are too large to render. Re-upload each scene video on Scene Videos (saved to server now).`
+          );
+        }
+
+        // Show VideoView progress UI instead of the generic skeleton loader
+        studioStore.setLoading(false);
+
         // Start Render
         const renderRes = await apiRequest(projectId, "/video/render", "POST", {
           storyboard: scriptingStore.storyboard,
@@ -715,6 +790,15 @@ export async function dispatchStudioAction(
     }
   } catch (err) {
     console.error("Studio Action Failed:", err);
+    const message =
+      err instanceof Error ? err.message : "Something went wrong. Check that backend services are running.";
+    studioStore.setActionError(message);
+    if (action === "ffmpeg_render") {
+      const mediaStore = useMediaStore.getState();
+      mediaStore.setRenderStatus("failed");
+      mediaStore.setRenderError(message);
+      studioStore.setLoading(false);
+    }
   } finally {
     // Only turn off loading directly if it is not video rendering (which does its own progress overlay)
     if (action !== "ffmpeg_render") {
@@ -770,7 +854,9 @@ function pollVideoRenderStatus(projectId: string, taskId: string) {
 
   let lastSignature = "";
   let staleSince = Date.now();
-  const STALE_MS = 90_000;
+  const sceneCount = Math.max(1, useScriptingStore.getState().storyboard.length);
+  // FFmpeg encode + ElevenLabs can sit on one % for minutes — scale with scene count
+  const STALE_MS = Math.max(180_000, sceneCount * 120_000);
 
   const intervalId = setInterval(async () => {
     try {
@@ -790,11 +876,21 @@ function pollVideoRenderStatus(projectId: string, taskId: string) {
         (res.status === "in_progress" || res.status === "pending")
       ) {
         if (Date.now() - staleSince > STALE_MS) {
+          const finalRes = await apiRequest(projectId, `/video/render/${taskId}/status`, "GET");
+          if (finalRes.status === "complete" && finalRes.videoUrl) {
+            clearInterval(intervalId);
+            renderPolls.delete(taskId);
+            mediaStore.setRenderStatus("complete");
+            mediaStore.setRenderProgress(100);
+            mediaStore.setVideoUrl(finalRes.videoUrl);
+            useProjectStore.getState().setLastGeneratedFormat(useProjectStore.getState().contentFormat);
+            return;
+          }
           clearInterval(intervalId);
           renderPolls.delete(taskId);
           mediaStore.setRenderStatus("failed");
           mediaStore.setRenderError(
-            "Render worker stalled or crashed (no progress for 90s). Restart the Celery worker, then render again."
+            `Render timed out (no progress for ${Math.round(STALE_MS / 1000)}s). Large voiceover renders can take several minutes — try again or reduce scene count.`
           );
           return;
         }

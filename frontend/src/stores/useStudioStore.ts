@@ -14,16 +14,19 @@ interface StudioState {
   activeView: StudioView;
   promptHistory: PromptHistoryEntry[];
   loading: boolean;
+  actionError: string | null;
   setActiveView: (view: StudioView) => void;
   addPromptHistory: (prompt: string, action: string, contentFormat: ContentFormat) => void;
   clearPromptHistory: () => void;
   setLoading: (loading: boolean) => void;
+  setActionError: (error: string | null) => void;
 }
 
 export const useStudioStore = create<StudioState>()((set) => ({
   activeView: "welcome",
   promptHistory: [],
   loading: false,
+  actionError: null,
   setActiveView: (view) => set({ activeView: view }),
   addPromptHistory: (prompt, action, contentFormat) =>
     set((state) => ({
@@ -34,4 +37,5 @@ export const useStudioStore = create<StudioState>()((set) => ({
     })),
   clearPromptHistory: () => set({ promptHistory: [] }),
   setLoading: (loading) => set({ loading }),
+  setActionError: (actionError) => set({ actionError }),
 }));

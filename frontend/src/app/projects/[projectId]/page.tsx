@@ -14,7 +14,7 @@ import { useResearchStore } from "@/stores/useResearchStore";
 import { useScriptingStore } from "@/stores/useScriptingStore";
 import { useMediaStore } from "@/stores/useMediaStore";
 import { useSeoStore } from "@/stores/useSeoStore";
-import { classifyIntent, dispatchStudioAction, ActionChipType } from "@/lib/intentRouter";
+import { classifyIntent, dispatchStudioAction, ActionChipType, isScriptStaleForBrief } from "@/lib/intentRouter";
 import { apiRequest } from "@/lib/api";
 
 interface ProjectPageProps {
@@ -74,7 +74,9 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     let hasData = false;
     
     if (action === "write_script") {
-      hasData = !!useScriptingStore.getState().script;
+      const hasScript = !!useScriptingStore.getState().script;
+      const stale = isScriptStaleForBrief();
+      hasData = hasScript && !stale;
       if (hasData) useStudioStore.getState().setActiveView("script");
     } else if (action === "scene_pictures") {
       useStudioStore.getState().setActiveView("scenes");

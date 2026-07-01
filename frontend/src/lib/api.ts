@@ -51,6 +51,46 @@ export function resolveFileCategory(mimeType: string, fileName: string): FileCat
  * Custom API client that maps requests to Next.js route handlers
  * and automatically injects project settings.
  */
+function parseApiErrorBody(errText: string): string | null {
+  if (!errText || errText === "Internal Server Error") return null;
+  try {
+    const json = JSON.parse(errText) as { detail?: string | { msg?: string }[] };
+    if (typeof json.detail === "string") return json.detail;
+    if (Array.isArray(json.detail)) {
+      return json.detail
+        .map((item) => (typeof item === "string" ? item : item?.msg))
+        .filter(Boolean)
+        .join("; ");
+    }
+  } catch {
+    // not JSON
+  }
+  return errText.trim() || null;
+}
+
+function backendUnavailableHint(status: number, path: string, errText: string): string {
+  const proxyDead =
+    !errText?.trim() ||
+    errText === "Internal Server Error" ||
+    errText.trimStart().startsWith("<!DOCTYPE") ||
+    /ECONNREFUSED|connect ECONNREFUSED/i.test(errText);
+
+  if (!proxyDead && status !== 502 && status !== 503) {
+    return "";
+  }
+
+  if (path.includes("/video/render")) {
+    return `Cannot start render — media service (:8003), Redis, or Celery worker may be down. Run ./dev.sh start and verify redis-cli ping → PONG.`;
+  }
+  if (path.includes("/generate/")) {
+    return `Media service unavailable on port 8003. Run ./dev.sh start from the repo root.`;
+  }
+  if (path.includes("/scripting/")) {
+    return `Scripting service unavailable on port 8002. Run ./dev.sh start from the repo root.`;
+  }
+  return `Backend unavailable (${status}). Run ./dev.sh start from the repo root — scripting :8002, media :8003.`;
+}
+
 export async function apiRequest(projectId: string, path: string, method = "POST", body: any = {}) {
   const { contentFormat, addAudioEnabled } = useProjectStore.getState();
 
@@ -70,17 +110,12 @@ export async function apiRequest(projectId: string, path: string, method = "POST
 
   if (!response.ok) {
     const errText = await response.text();
-    const backendUnavailable =
-      response.status === 502 ||
-      response.status === 503 ||
-      (response.status === 500 &&
-        (!errText ||
-          errText === "Internal Server Error" ||
-          errText.includes("ECONNREFUSED") ||
-          errText.includes("connect ECONNREFUSED")));
+    const parsed = parseApiErrorBody(errText);
+    const proxyHint = backendUnavailableHint(response.status, path, errText);
+    const backendUnavailable = Boolean(proxyHint);
     const hint = backendUnavailable
-      ? "Backend service unavailable — run ./dev.sh start from the repo root (media on port 8003 for stock search)."
-      : errText || response.statusText;
+      ? proxyHint
+      : parsed || errText || response.statusText;
     throw new Error(`API Error [${response.status}]: ${hint}`);
   }
 

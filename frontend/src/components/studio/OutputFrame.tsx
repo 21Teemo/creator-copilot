@@ -96,7 +96,7 @@ export default function OutputFrame({ projectId, onSelectPrompt, onPublish }: Ou
 
       {/* Render Canvas */}
       <div className="flex-1 p-3 sm:p-4 md:p-6 flex flex-col min-h-0 overflow-y-auto overscroll-y-contain">
-        {loading ? (
+        {loading && activeView !== "ffmpeg" ? (
           <SkeletonLoader view={activeView} contentFormat={contentFormat} />
         ) : (
           renderView(activeView, projectId, onSelectPrompt, onPublish)

@@ -3,6 +3,7 @@ import time
 
 from google import genai
 from google.genai import types
+from google.genai.errors import ClientError
 
 from media.config import GEMINI_API_KEY, GEMINI_VIDEO_MODEL
 from media.services.image_gen import ASPECT_RATIOS, _build_generation_prompt, save_generated_asset
@@ -30,13 +31,22 @@ def generate_scene_video(
     aspect_ratio = ASPECT_RATIOS.get(content_format, ASPECT_RATIOS["long"])
     client = _gemini_client()
 
-    operation = client.models.generate_videos(
-        model=GEMINI_VIDEO_MODEL,
-        prompt=generation_prompt,
-        config=types.GenerateVideosConfig(
-            aspect_ratio=aspect_ratio,
-        ),
-    )
+    try:
+        operation = client.models.generate_videos(
+            model=GEMINI_VIDEO_MODEL,
+            prompt=generation_prompt,
+            config=types.GenerateVideosConfig(
+                aspect_ratio=aspect_ratio,
+            ),
+        )
+    except ClientError as exc:
+        message = str(exc)
+        if "429" in message or "RESOURCE_EXHAUSTED" in message or "credits" in message.lower():
+            raise RuntimeError(
+                "Gemini Veo credits depleted — top up at https://ai.studio/projects "
+                "or use Pexels stock video (automatic fallback when available)."
+            ) from exc
+        raise RuntimeError(f"Gemini Veo failed: {message}") from exc
 
     for _ in range(MAX_POLL_ATTEMPTS):
         if operation.done:

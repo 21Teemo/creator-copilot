@@ -82,7 +82,18 @@ export const useResearchStore = create<ResearchState>()((set) => ({
   trends: [],
   summaries: null,
   activeTrend: null,
-  setTrends: (trends) => set({ trends }),
+  setTrends: (trends) => {
+    const seen = new Set<string>();
+    const deduped = trends.filter((trend, index) => {
+      const key =
+        trend.videoUrl?.trim() ||
+        `${trend.title.trim()}::${trend.channelName.trim()}::${index}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    set({ trends: deduped });
+  },
   setSummaries: (summaries) =>
     set({
       summaries: summaries

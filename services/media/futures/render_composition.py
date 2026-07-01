@@ -54,6 +54,31 @@ class RenderProfile:
     video_filters: str | None = None
 
 
+def _odd_unsharp_matrix(value: str) -> str:
+    """FFmpeg unsharp matrix sizes must be odd integers (3–23)."""
+    try:
+        n = int(value)
+        if n % 2 == 0:
+            n += 1
+        return str(min(23, max(3, n)))
+    except ValueError:
+        return value
+
+
+def _normalize_unsharp_params(params: str) -> str:
+    """FFmpeg unsharp wants 6 values or 3 luma-only; matrix sizes must be odd."""
+    parts = params.split(":")
+    if len(parts) >= 2:
+        parts[0] = _odd_unsharp_matrix(parts[0])
+        parts[1] = _odd_unsharp_matrix(parts[1])
+    if len(parts) == 3:
+        return f"{parts[0]}:{parts[1]}:{parts[2]}:{parts[0]}:{parts[1]}:{parts[2]}"
+    if len(parts) >= 5:
+        parts[3] = _odd_unsharp_matrix(parts[3])
+        parts[4] = _odd_unsharp_matrix(parts[4])
+    return ":".join(parts)
+
+
 def _build_video_filters() -> str | None:
     """Combine LUT + unsharp into a single FFmpeg -vf chain (applied per segment encode)."""
     filters: list[str] = []
@@ -64,7 +89,12 @@ def _build_video_filters() -> str | None:
         else:
             logger.warning("RENDER_LUT_PATH set but file not found: %s", LUT_PATH)
     if UNSHARP_PARAMS:
-        filters.append(f"unsharp={UNSHARP_PARAMS}")
+        if filters:
+            # lut3d often outputs high-bit RGB; unsharp + VideoToolbox need yuv420p
+            filters.append("format=yuv420p")
+        filters.append(f"unsharp={_normalize_unsharp_params(UNSHARP_PARAMS)}")
+    elif filters:
+        filters.append("format=yuv420p")
     return ",".join(filters) if filters else None
 
 
@@ -164,21 +194,37 @@ def write_render_output(
         f", vf={profile.video_filters}" if profile.video_filters else "",
     )
     started = time.monotonic()
-    ffmpeg_params = list(profile.ffmpeg_params)
-    if profile.video_filters:
-        ffmpeg_params.extend(["-vf", profile.video_filters])
-    write_kwargs: dict = {
-        "fps": profile.fps,
-        "codec": profile.codec,
-        "threads": profile.threads,
-        "ffmpeg_params": ffmpeg_params,
-        "logger": None,
-    }
-    if getattr(clip, "audio", None) is not None:
-        write_kwargs["audio_codec"] = "aac"
-    else:
-        write_kwargs["audio"] = False
-    clip.write_videofile(output_path, **write_kwargs)
+
+    def _do_encode(*, use_filters: bool) -> None:
+        ffmpeg_params = list(profile.ffmpeg_params)
+        if use_filters and profile.video_filters:
+            ffmpeg_params.extend(["-vf", profile.video_filters])
+        write_kwargs: dict = {
+            "fps": profile.fps,
+            "codec": profile.codec,
+            "threads": profile.threads,
+            "ffmpeg_params": ffmpeg_params,
+            "logger": None,
+        }
+        if getattr(clip, "audio", None) is not None:
+            write_kwargs["audio_codec"] = "aac"
+        else:
+            write_kwargs["audio"] = False
+        clip.write_videofile(output_path, **write_kwargs)
+
+    try:
+        _do_encode(use_filters=bool(profile.video_filters))
+    except (OSError, IOError) as exc:
+        if not profile.video_filters:
+            raise
+        logger.warning(
+            "FFmpeg encode with filters failed [%s] (%s) — retrying without LUT/unsharp",
+            label,
+            exc,
+        )
+        if os.path.isfile(output_path):
+            os.remove(output_path)
+        _do_encode(use_filters=False)
     elapsed = time.monotonic() - started
     size_mb = os.path.getsize(output_path) / (1024 * 1024) if os.path.isfile(output_path) else 0
     logger.info(
@@ -364,9 +410,7 @@ def load_visual_clip(asset_path: str, duration: float, is_video: bool):
             video_file = video_file.without_audio()
         if video_file.duration < duration:
             repeats = int(duration / max(video_file.duration, 0.1)) + 1
-            looped = concatenate_videoclips([video_file] * repeats).with_duration(duration)
-            video_file.close()
-            return looped
+            return concatenate_videoclips([video_file] * repeats).with_duration(duration)
         return video_file.subclipped(0, duration)
 
     return ImageClip(asset_path).with_duration(duration)

@@ -31,6 +31,9 @@ class ScriptRequest(BasePayload):
     creativeAngle: Optional[str] = None
     visualStyleNotes: Optional[str] = None
     visualReferences: Optional[List[VisualReferenceItem]] = None
+    storytellingEnabled: Optional[bool] = False
+    valueLens: Optional[str] = "auto"
+    researchBrief: Optional[str] = None
 
 class GradeRequest(BasePayload):
     prompt: str
@@ -48,6 +51,9 @@ async def get_storyboard(projectId: str, payload: ScriptRequest):
         creative_angle=payload.creativeAngle or "",
         visual_style_notes=payload.visualStyleNotes or "",
         visual_references=[r.model_dump() for r in (payload.visualReferences or [])],
+        storytelling_enabled=bool(payload.storytellingEnabled),
+        research_brief=payload.researchBrief or "",
+        value_lens=(payload.valueLens or "auto").strip().lower(),
     )
     return result
 

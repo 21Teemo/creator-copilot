@@ -2,13 +2,15 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useScriptingStore, VISUAL_STYLES, type StoryboardScene } from "@/stores/useScriptingStore";
+import { useScriptingStore, VISUAL_STYLES, VALUE_LENSES, type StoryboardScene, type ValueLensId } from "@/stores/useScriptingStore";
 import { useStudioStore } from "@/stores/useStudioStore";
+import { useResearchStore } from "@/stores/useResearchStore";
 import {
   useMediaStore,
   type VisualReferenceCategory,
 } from "@/stores/useMediaStore";
 import { uploadMediaAsset } from "@/lib/api";
+import { isScriptStaleForBrief } from "@/lib/intentRouter";
 import {
   FileText,
   Eye,
@@ -126,7 +128,7 @@ export function VisualReferencesPanel({
       {(!collapsible || isOpen) && (
         <>
       <p className="text-[10px] text-studio-text-secondary mb-3 leading-relaxed">
-        Upload reference images to steer Gemini Nano Banana across scenes. Labels are appended to each scene prompt.
+        Upload reference images to steer scene consistency. Gemini analyzes each image and locks Environment, Character, and Gadgets across every scene.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {REF_CATEGORIES.map((cat) => {
@@ -197,12 +199,49 @@ interface ScriptViewProps {
 
 function formatStoryboardForCopy(storyboard: StoryboardScene[]): string {
   return storyboard
-    .map(
-      (scene) =>
-        `Scene ${scene.sceneNumber}\nImage prompt: ${scene.visualPrompt}\nVoiceover: ${scene.narrationText || ""}`
-    )
+    .map((scene) => {
+      const lines = [`Scene ${scene.sceneNumber}`];
+      if (scene.environment?.trim()) lines.push(`Environment: ${scene.environment}`);
+      if (scene.character?.trim()) lines.push(`Character: ${scene.character}`);
+      if (scene.gadgets?.trim()) lines.push(`Gadgets: ${scene.gadgets}`);
+      lines.push(`Image prompt: ${scene.visualPrompt}`);
+      lines.push(`Voiceover: ${scene.narrationText || ""}`);
+      return lines.join("\n");
+    })
     .join("\n\n");
 }
+
+function storyboardHasConsistencyFields(storyboard: StoryboardScene[]): boolean {
+  return storyboard.some(
+    (scene) => Boolean(scene.environment?.trim() || scene.character?.trim() || scene.gadgets?.trim())
+  );
+}
+
+const CONSISTENCY_FIELDS: {
+  key: "environment" | "character" | "gadgets";
+  label: string;
+  placeholder: string;
+  icon: React.ReactNode;
+}[] = [
+  {
+    key: "environment",
+    label: "Environment",
+    placeholder: "Bright modern gym, orange walls, natural window light",
+    icon: <MapPin size={10} className="text-accent shrink-0" />,
+  },
+  {
+    key: "character",
+    label: "Character",
+    placeholder: "Woman in red hoodie, curly hair, mid-20s",
+    icon: <User size={10} className="text-accent shrink-0" />,
+  },
+  {
+    key: "gadgets",
+    label: "Gadgets",
+    placeholder: "White wireless earbuds (leave empty if N/A)",
+    icon: <Watch size={10} className="text-accent shrink-0" />,
+  },
+];
 
 export default function ScriptView({ onPush }: ScriptViewProps) {
   const {
@@ -212,8 +251,14 @@ export default function ScriptView({ onPush }: ScriptViewProps) {
     updateStoryboardScene,
     selectedStyle,
     setSelectedStyle,
+    storytellingEnabled,
+    setStorytellingEnabled,
+    valueLens,
+    setValueLens,
   } = useScriptingStore();
   const loading = useStudioStore((state) => state.loading);
+  const actionError = useStudioStore((state) => state.actionError);
+  const researchBrief = useResearchStore((state) => state.summaries?.summaryText?.trim() || "");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isEditingStoryboard, setIsEditingStoryboard] = useState(false);
   const [copiedStoryboard, setCopiedStoryboard] = useState(false);
@@ -231,6 +276,11 @@ export default function ScriptView({ onPush }: ScriptViewProps) {
 
   const wordCount = script ? script.trim().split(/\s+/).length : 0;
   const charCount = script ? script.length : 0;
+  const scriptStale = isScriptStaleForBrief();
+  const visualReferences = useMediaStore((state) => state.visualReferences);
+  const showConsistencyFields =
+    storyboardHasConsistencyFields(storyboard) ||
+    visualReferences.some((ref) => ref.label.trim() || ref.imageUrl?.trim());
 
   const handleCopyStoryboard = async () => {
     if (storyboard.length === 0) return;
@@ -243,30 +293,130 @@ export default function ScriptView({ onPush }: ScriptViewProps) {
     onPush?.("Re-generate scene image prompts from the research brief.", "write_script");
   };
 
+  const handleValueLensSelect = (lens: ValueLensId) => {
+    setValueLens(lens);
+    if (lens !== "auto") setStorytellingEnabled(true);
+  };
+
+  const lensPillClass = (lensId: ValueLensId) =>
+    `px-2 py-1 rounded-full border text-[10px] font-semibold transition-colors cursor-pointer ${
+      valueLens === lensId && storytellingEnabled
+        ? "bg-accent/15 border-accent/40 text-accent"
+        : "border-studio-border/60 text-studio-text-secondary hover:text-studio-text-primary hover:border-studio-border"
+    }`;
+
+  const aestheticPresetsBlock = (
+    <div className="shrink-0 bg-studio-surface border border-studio-border/60 p-3.5 rounded-2xl">
+      <h4 className="text-[10px] font-bold text-studio-text-secondary uppercase tracking-wider mb-2.5 flex items-center gap-1">
+        <Sparkles size={11} className="text-accent" />
+        Aesthetic Visual Presets <span className="hidden sm:inline">(Hover for Style Guide details)</span>
+      </h4>
+      <div className="flex flex-wrap gap-2">
+        {VISUAL_STYLES.map((style) => {
+          const isSelected = selectedStyle === style.id;
+          return (
+            <div key={style.id} className="relative group">
+              <button
+                onClick={() => setSelectedStyle(style.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer border ${
+                  isSelected
+                    ? "bg-accent/15 border-accent text-accent shadow-[0_0_12px_rgba(99,102,241,0.15)]"
+                    : "bg-studio-bg border-studio-border/60 text-studio-text-secondary hover:text-studio-text-primary hover:border-studio-border/80"
+                }`}
+              >
+                <span>{style.name}</span>
+                {isSelected && <Check size={11} className="shrink-0" />}
+              </button>
+
+              {style.id !== "default" && (
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 sm:w-72 rounded-2xl bg-[#131317]/95 backdrop-blur-xl border border-accent/25 shadow-2xl p-4 opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 group-focus-within:pointer-events-auto transition-all duration-200 origin-top z-50 text-left select-none hidden sm:block">
+                  <div className="flex items-center gap-1.5 border-b border-studio-border/50 pb-1.5 mb-2">
+                    <Sparkles size={12} className="text-accent shrink-0" />
+                    <h5 className="text-[11px] font-bold text-studio-text-primary truncate">
+                      {style.name} Style Preset
+                    </h5>
+                  </div>
+                  <div className="space-y-2.5 text-[10px] leading-relaxed">
+                    <div>
+                      <span className="font-bold uppercase text-studio-text-secondary text-[8px] tracking-wider block mb-0.5">
+                        Core Aesthetic
+                      </span>
+                      <p className="text-studio-text-primary">{style.aesthetic}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="font-bold uppercase text-studio-text-secondary text-[8px] tracking-wider block mb-0.5">
+                          Lighting
+                        </span>
+                        <p className="text-studio-text-primary line-clamp-3">{style.lighting}</p>
+                      </div>
+                      <div>
+                        <span className="font-bold uppercase text-studio-text-secondary text-[8px] tracking-wider block mb-0.5">
+                          Composition
+                        </span>
+                        <p className="text-studio-text-primary line-clamp-3">{style.composition}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const visualSetupSection = (
+    <div className="space-y-4 shrink-0">
+      <VisualReferencesPanel collapsible defaultOpen={false} />
+      {aestheticPresetsBlock}
+    </div>
+  );
+
   if (storyboard.length === 0 && !script?.trim()) {
     return (
       <div className="flex flex-col flex-1 min-h-0 text-center py-4 px-2">
-        <div className="flex flex-col items-center justify-center py-6 shrink-0">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain pr-1 -mr-1 text-left space-y-4">
+          {visualSetupSection}
+          <div className="flex flex-col items-center justify-center py-6 shrink-0 text-center">
           <FileText size={40} className="text-studio-text-secondary mb-4" />
           <p className="text-sm text-studio-text-primary font-bold mb-1">No scene prompts yet</p>
           <p className="text-xs text-studio-text-secondary max-w-sm mb-4">
-            Complete Fact Finder, then run <strong className="text-studio-text-primary">Write Script</strong> to
-            generate scene descriptions and voiceover lines.
+            {researchBrief ? (
+              <>
+                Your research brief is ready. Generate scene prompts to match its structure
+                {researchBrief.toLowerCase().includes("no voiceover") ||
+                researchBrief.toLowerCase().includes("ambient")
+                  ? " (voiceover may be empty if the source video is silent)."
+                  : " and voiceover."}
+              </>
+            ) : (
+              <>
+                Complete <strong className="text-studio-text-primary">Fact Finder</strong> first, then run{" "}
+                <strong className="text-studio-text-primary">Write Script</strong>.
+              </>
+            )}
           </p>
+          {actionError && (
+            <p className="text-xs text-red-400 max-w-md mb-3 flex items-start gap-2 text-left mx-auto">
+              <AlertCircle size={14} className="shrink-0 mt-0.5" />
+              <span>{actionError}</span>
+            </p>
+          )}
           {onPush && (
             <button
               type="button"
               onClick={handleRegenerateStoryboard}
-              disabled={loading}
+              disabled={loading || !researchBrief}
+              title={!researchBrief ? "Run Fact Finder first to build a research brief" : undefined}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent hover:bg-accent/90 text-xs font-bold text-white transition-all cursor-pointer disabled:opacity-50"
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
               Generate Scene Prompts
             </button>
           )}
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain pr-1 -mr-1 text-left">
-          <VisualReferencesPanel collapsible defaultOpen={false} />
+          </div>
         </div>
       </div>
     );
@@ -346,6 +496,27 @@ export default function ScriptView({ onPush }: ScriptViewProps) {
               <span className="text-[10px] font-bold text-accent uppercase tracking-wider">
                 Scene {scene.sceneNumber}
               </span>
+              {showConsistencyFields && (
+                <div className="grid grid-cols-1 gap-2">
+                  {CONSISTENCY_FIELDS.map((field) => (
+                    <div key={field.key}>
+                      <label className="text-[9px] font-semibold text-studio-text-secondary uppercase flex items-center gap-1 mb-1">
+                        {field.icon}
+                        {field.label}
+                      </label>
+                      <textarea
+                        value={scene[field.key] || ""}
+                        onChange={(e) =>
+                          updateStoryboardScene(scene.sceneNumber, { [field.key]: e.target.value })
+                        }
+                        rows={field.key === "gadgets" ? 1 : 2}
+                        className="w-full text-[11px] text-studio-text-primary leading-relaxed bg-studio-surface/50 border border-studio-border/50 rounded-lg p-2 focus:outline-none focus:border-accent/40 resize-y min-h-[40px]"
+                        placeholder={field.placeholder}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
               <div>
                 <label className="text-[9px] font-semibold text-studio-text-secondary uppercase block mb-1">
                   Scene Image Prompt
@@ -384,6 +555,23 @@ export default function ScriptView({ onPush }: ScriptViewProps) {
               <span className="text-[10px] font-bold text-accent uppercase tracking-wider">
                 Scene {scene.sceneNumber}
               </span>
+              {showConsistencyFields && (
+                <div className="space-y-1.5">
+                  {CONSISTENCY_FIELDS.map((field) =>
+                    scene[field.key]?.trim() ? (
+                      <div key={field.key}>
+                        <span className="text-[9px] font-semibold text-studio-text-secondary uppercase flex items-center gap-1 mb-0.5">
+                          {field.icon}
+                          {field.label}
+                        </span>
+                        <p className="text-[11px] text-studio-text-primary leading-relaxed">
+                          {scene[field.key]}
+                        </p>
+                      </div>
+                    ) : null
+                  )}
+                </div>
+              )}
               <div>
                 <span className="text-[9px] font-semibold text-studio-text-secondary uppercase block mb-0.5">
                   Scene Description
@@ -461,81 +649,64 @@ export default function ScriptView({ onPush }: ScriptViewProps) {
             Scene descriptions and narration below. Visual references and presets are optional setup.
           </p>
         </div>
-        <div className="flex items-center gap-3 text-xs text-studio-text-secondary font-medium shrink-0">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-studio-text-secondary font-medium shrink-0">
+          <button
+            type="button"
+            onClick={() => setStorytellingEnabled(!storytellingEnabled)}
+            title="Creative storytelling mode: value lenses, pacing, metaphors, direct address"
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-semibold transition-colors cursor-pointer ${
+              storytellingEnabled
+                ? "bg-accent/15 border-accent/40 text-accent"
+                : "border-studio-border/60 text-studio-text-secondary hover:text-studio-text-primary"
+            }`}
+          >
+            <Sparkles size={11} />
+            Storytelling
+          </button>
+          {VALUE_LENSES.map((lens) => (
+            <button
+              key={lens.id}
+              type="button"
+              onClick={() => handleValueLensSelect(lens.id)}
+              title={lens.hint}
+              className={lensPillClass(lens.id)}
+            >
+              {lens.shortLabel}
+            </button>
+          ))}
+          <span className="text-studio-border/80 hidden sm:inline">|</span>
           <span>{storyboard.length} scenes</span>
           <span className="text-studio-border">|</span>
           <span>{wordCount} words</span>
         </div>
       </div>
 
+      {scriptStale && (
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-accent/30 bg-accent/10 px-3 py-2.5 shrink-0">
+          <p className="text-xs text-studio-text-primary flex items-center gap-2">
+            <AlertCircle size={14} className="text-accent shrink-0" />
+            Research brief changed — this script is from a previous trend.
+          </p>
+          {onPush && (
+            <button
+              type="button"
+              onClick={() => onPush("Re-generate script from the current research brief.", "write_script")}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold text-white bg-accent rounded-full hover:bg-accent/80 transition-colors cursor-pointer shrink-0 self-end sm:self-auto"
+            >
+              <RefreshCw size={10} />
+              Re-generate
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain pr-1 -mr-1 space-y-4 pb-2">
+        {visualSetupSection}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
           <div className="lg:col-span-2 order-1">{scenePromptBlock}</div>
           <div className="order-2">{voiceoverBlock}</div>
         </div>
-
-        <VisualReferencesPanel collapsible defaultOpen={false} />
-
-        {/* Visual Style Presets Panel */}
-        <div className="shrink-0 bg-studio-surface border border-studio-border/60 p-3.5 rounded-2xl">
-        <h4 className="text-[10px] font-bold text-studio-text-secondary uppercase tracking-wider mb-2.5 flex items-center gap-1">
-          <Sparkles size={11} className="text-accent" />
-          Aesthetic Visual Presets <span className="hidden sm:inline">(Hover for Style Guide details)</span>
-        </h4>
-        <div className="flex flex-wrap gap-2">
-          {VISUAL_STYLES.map((style) => {
-            const isSelected = selectedStyle === style.id;
-            return (
-              <div key={style.id} className="relative group">
-                <button
-                  onClick={() => setSelectedStyle(style.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer border ${
-                    isSelected
-                      ? "bg-accent/15 border-accent text-accent shadow-[0_0_12px_rgba(99,102,241,0.15)]"
-                      : "bg-studio-bg border-studio-border/60 text-studio-text-secondary hover:text-studio-text-primary hover:border-studio-border/80"
-                  }`}
-                >
-                  <span>{style.name}</span>
-                  {isSelected && <Check size={11} className="shrink-0" />}
-                </button>
-
-                {style.id !== "default" && (
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 sm:w-72 rounded-2xl bg-[#131317]/95 backdrop-blur-xl border border-accent/25 shadow-2xl p-4 opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 group-focus-within:pointer-events-auto transition-all duration-200 origin-top z-50 text-left select-none hidden sm:block">
-                    <div className="flex items-center gap-1.5 border-b border-studio-border/50 pb-1.5 mb-2">
-                      <Sparkles size={12} className="text-accent shrink-0" />
-                      <h5 className="text-[11px] font-bold text-studio-text-primary truncate">
-                        {style.name} Style Preset
-                      </h5>
-                    </div>
-                    <div className="space-y-2.5 text-[10px] leading-relaxed">
-                      <div>
-                        <span className="font-bold uppercase text-studio-text-secondary text-[8px] tracking-wider block mb-0.5">
-                          Core Aesthetic
-                        </span>
-                        <p className="text-studio-text-primary">{style.aesthetic}</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <span className="font-bold uppercase text-studio-text-secondary text-[8px] tracking-wider block mb-0.5">
-                            Lighting
-                          </span>
-                          <p className="text-studio-text-primary line-clamp-3">{style.lighting}</p>
-                        </div>
-                        <div>
-                          <span className="font-bold uppercase text-studio-text-secondary text-[8px] tracking-wider block mb-0.5">
-                            Composition
-                          </span>
-                          <p className="text-studio-text-primary line-clamp-3">{style.composition}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
       </div>
     </div>
   );

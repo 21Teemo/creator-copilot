@@ -281,7 +281,7 @@ export default function FactsView({ onPush }: FactsViewProps) {
             Research Brief & Fact Summary
           </h3>
           <p className="text-xs text-studio-text-secondary">
-            Synthesized by Gemini based on top web search queries
+            Synthesized by DeepSeek from web sources and transcripts
           </p>
         </div>
       </div>
@@ -408,7 +408,7 @@ export default function FactsView({ onPush }: FactsViewProps) {
                   ) : (
                     <p className="text-xs text-studio-text-secondary flex items-center gap-2">
                       <AlertCircle size={14} />
-                      Analysis unavailable. Hit Regenerate with GEMINI_API_KEY set.
+                      Analysis unavailable. Set GEMINI_API_KEY for Gemini vision and regenerate.
                     </p>
                   )}
                 </div>

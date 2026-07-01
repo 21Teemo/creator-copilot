@@ -190,6 +190,14 @@ async def generate_scene_video_clip(projectId: str, payload: SceneGeneratePayloa
             scene_number=payload.sceneNumber,
         )
     except RuntimeError as exc:
+        stock = search_pexels_videos(payload.prompt, visual_references=refs)
+        if stock:
+            scene_num = payload.sceneNumber or 1
+            match = next((v for v in stock if v.get("sceneNumber") == scene_num), stock[0])
+            match = {**match, "sceneNumber": scene_num, "source": "pexels-fallback"}
+            return match
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if payload.sceneNumber is not None:
         result["sceneNumber"] = payload.sceneNumber
@@ -233,11 +241,16 @@ async def upload_asset(projectId: str, file: UploadFile = File(...)):
 @router.post("/video/render", response_model=RenderTriggerResponse)
 async def trigger_render(projectId: str, payload: RenderPayload):
     try:
-        # Trigger async rendering in Celery worker
         task = render_video.delay(projectId, payload.model_dump())
         return {"taskId": task.id}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to enqueue render task: {str(e)}")
+        msg = str(e)
+        if any(token in msg.lower() for token in ("redis", "connection refused", "celery", "broker")):
+            raise HTTPException(
+                status_code=503,
+                detail="Redis/Celery unavailable — run ./dev.sh start and ensure redis-cli ping returns PONG.",
+            ) from e
+        raise HTTPException(status_code=502, detail=f"Failed to enqueue render task: {msg}") from e
 
 @router.get("/video/render/{taskId}/status", response_model=RenderStatusResponse)
 async def get_render_status(projectId: str, taskId: str):

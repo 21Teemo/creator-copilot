@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useScriptingStore } from "@/stores/useScriptingStore";
 import { useMediaStore, type SceneVideo } from "@/stores/useMediaStore";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, uploadMediaAsset } from "@/lib/api";
 import { buildSceneVideoGenerateRequest, visualPromptForStockSearch } from "@/lib/intentRouter";
 import SceneStockSearchPanel from "@/components/studio/SceneStockSearchPanel";
 import { Film, Camera, RefreshCw, Download, Upload } from "lucide-react";
@@ -28,6 +28,7 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
   const storyboard = useScriptingStore((state) => state.storyboard);
   const contentFormat = useProjectStore((state) => state.contentFormat);
   const [regeneratingScenes, setRegeneratingScenes] = useState<number[]>([]);
+  const [uploadingScenes, setUploadingScenes] = useState<number[]>([]);
 
   const displayScenes = useMemo((): DisplayScene[] => {
     if (storyboard.length > 0) {
@@ -94,15 +95,23 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
     document.body.removeChild(link);
   };
 
-  const handleUploadVideo = (sceneNumber: number, event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadVideo = async (
+    sceneNumber: number,
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    event.target.value = "";
+    if (!file || !projectId) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      upsertSceneVideo(sceneNumber, { videoUrl: reader.result as string });
-    };
-    reader.readAsDataURL(file);
+    setUploadingScenes((prev) => [...prev, sceneNumber]);
+    try {
+      const url = await uploadMediaAsset(projectId, file);
+      upsertSceneVideo(sceneNumber, { videoUrl: url });
+    } catch (err) {
+      console.error("Scene video upload failed:", err);
+    } finally {
+      setUploadingScenes((prev) => prev.filter((num) => num !== sceneNumber));
+    }
   };
 
   const handlePromptChange = (sceneNumber: number, newPrompt: string) => {
@@ -178,6 +187,8 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
         >
           {displayScenes.map((scene) => {
             const isRegenerating = regeneratingScenes.includes(scene.sceneNumber);
+            const isUploading = uploadingScenes.includes(scene.sceneNumber);
+            const isBusy = isRegenerating || isUploading;
             const hasVideo = Boolean(scene.videoUrl);
             return (
               <div
@@ -191,7 +202,7 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
                     contentFormat === "short" ? "aspect-[9/16]" : "aspect-[16/9]"
                   }`}
                 >
-                  {hasVideo && !isRegenerating ? (
+                  {hasVideo && !isBusy ? (
                     <video
                       src={scene.videoUrl!}
                       loop
@@ -200,7 +211,7 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
                       autoPlay
                       className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
-                  ) : !isRegenerating ? (
+                  ) : !isBusy ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center">
                       <Film size={24} className="text-studio-text-secondary/50" />
                       <span className="text-[10px] font-medium text-studio-text-secondary leading-snug">
@@ -263,11 +274,11 @@ export default function SceneVideosView({ onPush }: SceneVideosViewProps) {
                     </div>
                   </div>
 
-                  {isRegenerating && (
+                  {isBusy && (
                     <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-2 z-10 backdrop-blur-sm">
                       <RefreshCw size={20} className="text-accent animate-spin" />
                       <span className="text-[9px] font-bold text-studio-text-secondary uppercase tracking-wider">
-                        Generating Clip...
+                        {isUploading ? "Uploading Clip..." : "Generating Clip..."}
                       </span>
                     </div>
                   )}

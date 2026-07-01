@@ -144,7 +144,7 @@ export default function TrendsView({ projectId, onPush }: TrendsViewProps) {
         >
           {trends.map((item, index) => (
             <div
-              key={item.videoUrl || `${item.title}-${index}`}
+              key={`trend-${index}-${item.videoUrl ?? item.title}`}
               className="flex flex-col rounded-2xl bg-studio-surface border border-studio-border/60 overflow-hidden hover:border-accent/40 hover:shadow-studio transition-all duration-200"
             >
               <a

@@ -105,6 +105,31 @@ def _report_progress(
 
 def download_file(url: str, suffix: str) -> str:
     os.makedirs(_ASSET_CACHE_DIR, exist_ok=True)
+
+    if url.startswith("data:"):
+        import base64
+
+        _, encoded = url.split(",", 1)
+        data = base64.b64decode(encoded)
+        cache_key = hashlib.sha256(data).hexdigest()
+        cached_path = os.path.join(_ASSET_CACHE_DIR, f"{cache_key}{suffix}")
+        if not os.path.isfile(cached_path) or os.path.getsize(cached_path) == 0:
+            with open(cached_path, "wb") as handle:
+                handle.write(data)
+        logger.info("Materialized data URL asset (%d KB) → %s", len(data) // 1024, cached_path)
+        return cached_path
+
+    static_marker = "/media/static/"
+    if static_marker in url:
+        rel_path = url.split(static_marker, 1)[1].split("?", 1)[0]
+        local_path = os.path.join(_MEDIA_ROOT, "static", rel_path)
+        if os.path.isfile(local_path) and os.path.getsize(local_path) > 0:
+            logger.info("Using local static asset → %s", local_path)
+            return local_path
+
+    if url.startswith("/"):
+        url = f"http://127.0.0.1:8003{url.replace('/media/static/', '/static/')}"
+
     cache_key = hashlib.sha256(url.encode("utf-8")).hexdigest()
     cached_path = os.path.join(_ASSET_CACHE_DIR, f"{cache_key}{suffix}")
     if os.path.isfile(cached_path) and os.path.getsize(cached_path) > 0:
@@ -202,16 +227,23 @@ def _render_segment_from_spec(
         is_video=spec.is_video_asset,
         profile=profile,
     )
-    base_clip.close()
 
     if audio_clip:
         clip = clip.with_audio(audio_clip)
 
     fd, segment_path = tempfile.mkstemp(suffix=".mp4")
     os.close(fd)
-    write_scene_segment(clip, segment_path, profile, scene_label=f"scene_{spec.scene_num}")
-    clip.close()
-    gc.collect()
+    try:
+        write_scene_segment(clip, segment_path, profile, scene_label=f"scene_{spec.scene_num}")
+    finally:
+        clip.close()
+        if audio_clip:
+            audio_clip.close()
+        try:
+            base_clip.close()
+        except Exception:
+            pass
+        gc.collect()
     _log_memory(f"after scene {spec.scene_num} segment encode")
     logger.info("Scene %s segment written: %s", spec.scene_num, segment_path)
     return spec.scene_idx, segment_path
@@ -526,7 +558,6 @@ def render_video(self, project_id: str, payload: dict):
                         is_video=spec.is_video_asset,
                         profile=profile,
                     )
-                    base_clip.close()
 
                     if audio_clip:
                         clip = clip.with_audio(audio_clip)
@@ -637,6 +668,12 @@ def render_video(self, project_id: str, payload: dict):
     except Exception as exc:
         logger.exception("[render %s] Failed: %s", self.request.id, exc)
         err = str(exc).split("\n")[0][:300]
+        if "Broken pipe" in err or "unsharp" in err.lower() or "Invalid argument" in err:
+            err = (
+                "FFmpeg encode failed (LUT/unsharp filter + VideoToolbox). "
+                "Retried without filters — if this persists, clear RENDER_LUT_PATH / "
+                "RENDER_UNSHARP_PARAMS in services/.env and restart Celery."
+            )
         return {"status": "failed", "progress": 0, "error": err}
 
     finally:

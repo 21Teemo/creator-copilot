@@ -5,48 +5,41 @@ alwaysApply: true
 
 # Restart Dev Services After Code Changes
 
-`dev.sh` and `npm run dev` run **without hot reload** for Python microservices. After editing code, restart the affected process so changes take effect.
+Python microservices have **no hot reload**. After editing code, restart the affected process.
+
+**Never** use bare `kill ... & uvicorn` — those die when the shell exits. Always use `dev.sh`.
 
 ## When to restart
 
 | Changed paths | Restart |
 |---------------|---------|
-| `services/research/**` | Research service (port **8001**) |
-| `services/scripting/**` | Scripting service (port **8002**) |
-| `services/media/**` | Media service (port **8003**) |
-| `services/seo/**` | SEO service (port **8004**) |
-| `services/video-worker/**` | Celery worker |
-| `frontend/**` | Next.js dev server (port **3030**) — usually auto-reloads; restart if behavior looks stale |
+| `services/research/**` | `./dev.sh restart research` |
+| `services/scripting/**` | `./dev.sh restart scripting` |
+| `services/media/**` | `./dev.sh restart media` |
+| `services/seo/**` | `./dev.sh restart seo` |
+| `services/video-worker/**` | `./dev.sh restart celery` |
+| `frontend/**` | Usually auto-reloads; `./dev.sh restart frontend` if stale |
 
-Do this **proactively** after implementing backend/frontend changes. Do not only tell the user to restart—run it yourself when you have shell access.
+Do this **proactively** after backend changes. Do not only tell the user to restart—run it yourself.
 
-## Single-service restart (from repo root)
-
-```bash
-# Research (8001)
-kill $(lsof -t -i:8001) 2>/dev/null
-cd services && source venv/bin/activate && python -m uvicorn research.main:app --host 127.0.0.1 --port 8001 &
-
-# Media (8003)
-kill $(lsof -t -i:8003) 2>/dev/null
-cd services && source venv/bin/activate && python -m uvicorn media.main:app --host 127.0.0.1 --port 8003 &
-```
-
-Swap `research` / port for `scripting` (8002), `media` (8003), or `seo` (8004).
-
-## Full stack
+## Commands (from repo root)
 
 ```bash
-./dev.sh start      # backend + celery + frontend (detached)
-./dev.sh status     # verify all services
-./dev.sh stop       # stop everything including frontend
+./dev.sh start              # full stack + watchdog (auto-restart on crash)
+./dev.sh status             # health check
+./dev.sh ensure             # restart any down services immediately
+./dev.sh watch              # start background watchdog (15s interval)
+./dev.sh restart media      # single service (research|scripting|media|seo|frontend|celery|all)
+./dev.sh stop
 ```
+
+Services run in **detached screen** sessions (`cc-media`, etc.) with a **restart loop** — they survive terminal/agent exit and recover from crashes.
 
 App URL: **http://localhost:3030**
 
-Research cold-starts can take **20–30 seconds** after `./dev.sh start`. Frontend first compile may take up to **~90 seconds**.
+Research cold-starts can take **20–30 seconds**. Frontend first compile may take **~90 seconds**.
 
 ## Verify after restart
 
-- Backend: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8001/docs` → `200`
-- New routes: hit the endpoint or check `/docs` on the service port
+- `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8003/docs` → `200`
+- `./dev.sh status` — all services `up`, watchdog `up`
